@@ -24,6 +24,7 @@ dex:
 limits:
   max_position_sol: 10.0          # Start small!
   min_profit_percent: 0.3          # 0.3% minimum
+  min_profit_usd: 1.0              # Minimum $1 profit
   max_slippage_percent: 0.5        # 0.5% max slippage
   max_daily_loss_usd: 50.0         # Stop loss
   max_daily_trades: 50              # Rate limit
@@ -33,7 +34,6 @@ execution:
   priority_fee_lamports: 10000     # ~0.00001 SOL priority
   simulation_required: true         # Always simulate first
   max_retries: 3
-  retry_delay_ms: 500
 
 monitoring:
   log_level: "info"                # debug, info, warn, error

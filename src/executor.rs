@@ -89,7 +89,20 @@ impl TransactionExecutor {
     fn setup_keypair_wallet(path: &str) -> Result<WalletType> {
         let wallet_bytes = std::fs::read(path)
             .map_err(|e| anyhow!("Failed to read wallet from {}: {}", path, e))?;
-        let wallet = Keypair::try_from(&wallet_bytes[..])
+
+        // Parse JSON array of bytes
+        let bytes: Vec<u8> = serde_json::from_slice(&wallet_bytes)
+            .map_err(|e| anyhow!("Failed to parse wallet JSON: {}", e))?;
+
+        // Convert to fixed-size array
+        if bytes.len() != 64 {
+            return Err(anyhow!("Invalid keypair length: expected 64 bytes, got {}", bytes.len()));
+        }
+
+        let mut keypair_bytes = [0u8; 64];
+        keypair_bytes.copy_from_slice(&bytes);
+
+        let wallet = Keypair::try_from(&keypair_bytes[..])
             .map_err(|e| anyhow!("Invalid wallet format: {}", e))?;
         
         warn!("⚠️ Using software keypair - consider using Ledger for production!");
