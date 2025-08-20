@@ -38,6 +38,9 @@ bot.log
 
 # Config (sensitive)
 wallet.json
+wallet_converted.json
+wall_k.txt
+temp_wallet.json
 private_key.json
 .env
 .env.local

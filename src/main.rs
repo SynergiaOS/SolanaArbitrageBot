@@ -1,5 +1,5 @@
 //! Solana Arbitrage Bot - Main Entry Point
-//! Simple, fast, profitable.
+//! Real-time arbitrage trading with Jupiter integration
 
 use anyhow::Result;
 use clap::Parser;
@@ -8,18 +8,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
 
-mod monitor;
-mod calculator;
-mod executor;
-mod safety;
-mod ledger;
-mod docx_reader;
-
-use monitor::DexMonitor;
-use calculator::ProfitCalculator;
-use executor::TransactionExecutor;
-use safety::SafetyGuard;
-use ledger::test_ledger_connection;
+// Import from lib
+use solana_arbitrage_bot::*;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -47,18 +37,10 @@ struct Args {
     /// Ledger derivation path for testing
     #[arg(long, default_value = "m/44'/501'/0'/0'")]
     ledger_path: String,
-
-    /// Read and analyze DOCX document
-    #[arg(long)]
-    read_docx: Option<String>,
-}
-
-#[derive(Clone)]
-struct SharedState {
-    raydium_price: Arc<Mutex<Option<f64>>>,
-    orca_price: Arc<Mutex<Option<f64>>>,
-    trades_today: Arc<Mutex<u32>>,
-    profit_today: Arc<Mutex<f64>>,
+    
+    /// Test real API connections and exit
+    #[arg(long, default_value_t = false)]
+    test_apis: bool,
 }
 
 #[tokio::main]
@@ -69,29 +51,14 @@ async fn main() -> Result<()> {
     // Parse CLI arguments
     let args = Args::parse();
     
-    info!("🚀 Starting Solana Arbitrage Bot");
+    info!("🚀 Starting Solana Arbitrage Bot v2.0");
     info!("Network: {}", args.network);
-    info!("Dry run: {}", args.dry_run);
+    info!("Mode: {}", if args.dry_run { "DRY RUN" } else { "LIVE TRADING" });
     
-    // Handle DOCX reading
-    if let Some(docx_path) = args.read_docx {
-        info!("📄 Reading DOCX document: {}", docx_path);
-        match read_docx_document(&docx_path).await {
-            Ok(()) => {
-                info!("✅ DOCX analysis completed successfully");
-                return Ok(());
-            }
-            Err(e) => {
-                error!("❌ DOCX reading failed: {}", e);
-                return Err(e);
-            }
-        }
-    }
-
-    // Handle Ledger connection test
+    // Handle test modes
     if args.test_ledger {
         info!("🔐 Testing Ledger connection...");
-        match test_ledger_connection(Some(&args.ledger_path)).await {
+        match ledger::test_ledger_connection(Some(&args.ledger_path)).await {
             Ok(()) => {
                 info!("✅ Ledger test completed successfully");
                 return Ok(());
@@ -101,6 +68,12 @@ async fn main() -> Result<()> {
                 return Err(e);
             }
         }
+    }
+    
+    if args.test_apis {
+        info!("🌐 Testing API connections...");
+        test_api_connections().await?;
+        return Ok(());
     }
     
     // Load configuration
@@ -118,30 +91,93 @@ async fn main() -> Result<()> {
         profit_today: Arc::new(Mutex::new(0.0)),
     };
     
+    // Create price update channel
+    let (price_tx, mut price_rx) = tokio::sync::mpsc::channel::<monitor::PriceUpdate>(100);
+    
     // Initialize components
-    let monitor = DexMonitor::new(
+    let monitor = monitor::DexMonitor::new(
         state.raydium_price.clone(),
         state.orca_price.clone(),
         &config,
-    )?;
+    )?
+    .with_price_channel(price_tx);
     
-    let calculator = ProfitCalculator::new(&config);
-    let executor = TransactionExecutor::new(&config, args.dry_run)?;
-    let safety = SafetyGuard::new(&config);
+    let calculator = calculator::ProfitCalculator::new(&config);
+    let executor = executor::TransactionExecutor::new(&config, args.dry_run)?;
+    let safety = safety::SafetyGuard::new(&config);
+
+    // Setup Discord alerts
+    let discord = if let Some(discord_config) = &config.discord {
+        Some(discord::DiscordAlert::new(
+            discord_config.webhook_url.clone(),
+            discord_config.enabled,
+        ))
+    } else {
+        None
+    };
+
+    // Send startup alert
+    if let Some(ref discord_alert) = discord {
+        let wallet_addr = executor.get_wallet_address();
+
+        if let Err(e) = discord_alert.send_startup_alert(
+            &wallet_addr,
+            &args.network,
+            if args.dry_run { "DRY RUN" } else { "LIVE TRADING" }
+        ).await {
+            warn!("Failed to send Discord startup alert: {}", e);
+        }
+    }
     
     // Start monitoring in background
     let monitor_handle = tokio::spawn(async move {
-        monitor.start_monitoring().await
+        if let Err(e) = monitor.start_monitoring().await {
+            error!("Monitor error: {}", e);
+        }
+    });
+    
+    // Start price update handler
+    let discord_clone = discord.clone();
+    let price_handler = tokio::spawn(async move {
+        let mut last_discord_update = std::time::Instant::now();
+        let mut raydium_price = 0.0;
+        let mut orca_price = 0.0;
+
+        while let Some(update) = price_rx.recv().await {
+            info!("📊 Price update from {}: ${:.4}", update.dex, update.price);
+
+            // Update prices
+            if update.dex == "Raydium" {
+                raydium_price = update.price;
+            } else if update.dex == "Orca" {
+                orca_price = update.price;
+            }
+
+            // Send Discord price update every 30 seconds (to avoid spam)
+            if last_discord_update.elapsed().as_secs() > 30 && raydium_price > 0.0 && orca_price > 0.0 {
+                if let Some(ref discord_alert) = discord_clone {
+                    if let Err(e) = discord_alert.send_price_update(raydium_price, orca_price).await {
+                        warn!("Failed to send Discord price update: {}", e);
+                    }
+                }
+                last_discord_update = std::time::Instant::now();
+            }
+        }
     });
     
     // Main arbitrage loop
     info!("💰 Starting arbitrage loop...");
+    info!("Looking for opportunities > ${:.2} profit", config.limits.min_profit_usd);
+    
+    let mut last_opportunity_time = std::time::Instant::now();
+    let mut opportunities_found = 0;
+    let mut trades_executed = 0;
     
     loop {
         // Check if we should continue trading
         if !safety.should_continue_trading(&state).await {
-            warn!("⛔ Safety limits reached, stopping for today");
-            sleep(Duration::from_secs(3600)).await; // Wait 1 hour
+            warn!("⛔ Safety limits reached, pausing for 1 hour");
+            sleep(Duration::from_secs(3600)).await;
             safety.reset_daily_limits(&state).await;
             continue;
         }
@@ -157,49 +193,154 @@ async fn main() -> Result<()> {
                 price_o,
                 max_position,
             ) {
+                opportunities_found += 1;
+                last_opportunity_time = std::time::Instant::now();
+                
                 info!(
-                    "🎯 Arbitrage opportunity found! Buy {} @ {}, Sell {} @ {}, Profit: ${:.2}",
+                    "🎯 Opportunity #{}: {} @ ${:.4} -> {} @ ${:.4} | Profit: ${:.2} ({:.2}%) | Confidence: {:.0}%",
+                    opportunities_found,
                     opportunity.buy_dex,
                     opportunity.buy_price,
                     opportunity.sell_dex,
                     opportunity.sell_price,
-                    opportunity.expected_profit_usd
+                    opportunity.profit_after_fees_usd,
+                    opportunity.profit_percentage,
+                    opportunity.confidence_score * 100.0
                 );
+
+                // Send Discord opportunity alert
+                if let Some(ref discord_alert) = discord {
+                    if let Err(e) = discord_alert.send_opportunity_alert(
+                        price_r,
+                        price_o,
+                        opportunity.profit_percentage,
+                        (opportunity.confidence_score * 100.0) as u8
+                    ).await {
+                        warn!("Failed to send Discord opportunity alert: {}", e);
+                    }
+                }
                 
-                // Execute if profitable enough
-                if opportunity.expected_profit_usd >= config.limits.min_profit_usd {
+                // Execute if profitable enough and confidence is high
+                if opportunity.profit_after_fees_usd >= config.limits.min_profit_usd 
+                    && opportunity.confidence_score > 0.5 {
+                    
+                    // Pre-trade safety check
+                    if !safety.pre_trade_check(&opportunity, config.wallet.use_ledger.unwrap_or(false)).await? {
+                        warn!("⚠️ Safety check failed, skipping trade");
+                        continue;
+                    }
+                    
                     match executor.execute_arbitrage(&opportunity).await {
                         Ok(signature) => {
-                            info!("✅ Trade executed! Signature: {}", signature);
-                            
+                            trades_executed += 1;
+                            info!("✅ Trade #{} executed! Signature: {}", trades_executed, signature);
+
+                            // Send Discord profit alert
+                            if let Some(ref discord_alert) = discord {
+                                if let Err(e) = discord_alert.send_profit_alert(
+                                    opportunity.profit_after_fees_usd,
+                                    &signature.to_string(),
+                                    &opportunity.buy_dex,
+                                    &opportunity.sell_dex,
+                                    opportunity.amount_sol
+                                ).await {
+                                    warn!("Failed to send Discord profit alert: {}", e);
+                                }
+                            }
+
                             // Update statistics
                             let mut trades = state.trades_today.lock().await;
                             *trades += 1;
-                            
+
                             let mut profit = state.profit_today.lock().await;
-                            *profit += opportunity.expected_profit_usd;
-                            
+                            *profit += opportunity.profit_after_fees_usd;
+
+                            // Record in safety system
+                            safety.record_trade(
+                                opportunity.profit_after_fees_usd,
+                                opportunity.amount_sol,
+                                true
+                            ).await;
+
                             info!("📊 Daily stats: {} trades, ${:.2} profit", *trades, *profit);
                         }
                         Err(e) => {
                             error!("❌ Trade execution failed: {}", e);
+
+                            // Send Discord error alert
+                            if let Some(ref discord_alert) = discord {
+                                if let Err(discord_err) = discord_alert.send_error_alert(
+                                    &e.to_string(),
+                                    "Trade Execution"
+                                ).await {
+                                    warn!("Failed to send Discord error alert: {}", discord_err);
+                                }
+                            }
+
+                            // Record failure
+                            safety.record_trade(
+                                -opportunity.estimated_gas_sol * price_r, // Lost gas cost
+                                opportunity.amount_sol,
+                                false
+                            ).await;
                         }
                     }
                 }
             }
         } else {
             // Waiting for price data
-            if raydium.is_none() {
+            if raydium.is_none() && orca.is_none() {
+                warn!("⏳ Waiting for price data from both DEXs...");
+            } else if raydium.is_none() {
                 warn!("⏳ Waiting for Raydium price data...");
-            }
-            if orca.is_none() {
+            } else {
                 warn!("⏳ Waiting for Orca price data...");
             }
+            
+            // Longer wait when no data
+            sleep(Duration::from_secs(1)).await;
+            continue;
+        }
+        
+        // Status update every minute if no opportunities
+        if last_opportunity_time.elapsed() > Duration::from_secs(60) {
+            info!("👀 Monitoring... Last opportunity: {}s ago | Found: {} | Executed: {}",
+                last_opportunity_time.elapsed().as_secs(),
+                opportunities_found,
+                trades_executed
+            );
+            last_opportunity_time = std::time::Instant::now();
         }
         
         // Small delay to prevent CPU spinning
         sleep(Duration::from_millis(100)).await;
     }
+}
+
+async fn test_api_connections() -> Result<()> {
+    info!("Testing Solana RPC...");
+    let client = solana_client::rpc_client::RpcClient::new("https://api.mainnet-beta.solana.com");
+    match client.get_version() {
+        Ok(version) => info!("✅ Solana RPC OK: {}", version.solana_core),
+        Err(e) => warn!("⚠️ Solana RPC error: {}", e),
+    }
+    
+    info!("Testing Jupiter API...");
+    match monitor::DexMonitor::get_jupiter_quote(
+        "So11111111111111111111111111111111111111112",
+        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        1_000_000_000,
+        50
+    ).await {
+        Ok(quote) => {
+            info!("✅ Jupiter API OK: 1 SOL = {} USDC", 
+                quote.out_amount as f64 / 1_000_000.0);
+        }
+        Err(e) => warn!("⚠️ Jupiter API error: {}", e),
+    }
+    
+    info!("API tests completed!");
+    Ok(())
 }
 
 fn load_config(path: &str) -> Result<Config> {
@@ -208,229 +349,4 @@ fn load_config(path: &str) -> Result<Config> {
         .build()?;
     
     Ok(settings.try_deserialize()?)
-}
-
-/// Read and analyze DOCX document for trading strategies
-async fn read_docx_document(path: &str) -> Result<()> {
-    use docx_reader::{DocxReader, TradingKeyword};
-
-    info!("📄 Analyzing DOCX document: {}", path);
-
-    // Create reader optimized for trading strategy documents
-    let reader = DocxReader::for_trading_strategy()
-        .with_tables(true)
-        .with_metadata(true)
-        .with_min_paragraph_length(15);
-
-    // Read the document
-    let content = reader.read_file(path).await?;
-
-    // Display summary
-    info!("📊 Document Summary:");
-    println!("{}", content.summary());
-
-    // Find trading-related keywords
-    let keywords = reader.find_trading_keywords(&content);
-
-    if !keywords.is_empty() {
-        info!("🔍 Trading Keywords Found:");
-        for keyword in keywords.iter().take(10) { // Show top 10
-            println!("  • {} ({}x)", keyword.keyword, keyword.count);
-            if !keyword.context.is_empty() {
-                println!("    Context: \"{}\"", keyword.context[0]);
-            }
-        }
-    }
-
-    // Search for specific trading terms
-    let important_terms = vec![
-        "arbitrage", "profit", "strategy", "risk", "SOL", "USDC",
-        "Raydium", "Orca", "trading", "bot"
-    ];
-
-    for term in important_terms {
-        let matches = content.search(term);
-        if !matches.is_empty() {
-            info!("🎯 Found '{}' in {} paragraphs:", term, matches.len());
-            for (i, paragraph) in matches.iter().take(3).enumerate() {
-                let preview = if paragraph.len() > 100 {
-                    format!("{}...", &paragraph[..100])
-                } else {
-                    paragraph.clone()
-                };
-                println!("  {}. {}", i + 1, preview);
-            }
-        }
-    }
-
-    // Extract potential configuration values
-    info!("⚙️ Potential Configuration Values:");
-    extract_config_values(&content.text);
-
-    // Extract trading rules
-    info!("📋 Potential Trading Rules:");
-    extract_trading_rules(&content.paragraphs);
-
-    Ok(())
-}
-
-/// Extract potential configuration values from text
-fn extract_config_values(text: &str) {
-    use regex::Regex;
-
-    println!("  📊 Numerical Values Found:");
-
-    // Look for percentage values
-    if let Ok(percent_regex) = Regex::new(r"(\d+(?:\.\d+)?)\s*%") {
-        let mut percentages = Vec::new();
-        for cap in percent_regex.captures_iter(text) {
-            if let Some(value) = cap.get(1) {
-                percentages.push(value.as_str());
-            }
-        }
-        if !percentages.is_empty() {
-            println!("    • Percentages: {}", percentages.join(", "));
-        }
-    }
-
-    // Look for dollar amounts
-    if let Ok(dollar_regex) = Regex::new(r"\$(\d+(?:\.\d+)?)") {
-        let mut dollars = Vec::new();
-        for cap in dollar_regex.captures_iter(text) {
-            if let Some(value) = cap.get(1) {
-                dollars.push(format!("${}", value.as_str()));
-            }
-        }
-        if !dollars.is_empty() {
-            println!("    • Dollar amounts: {}", dollars.join(", "));
-        }
-    }
-
-    // Look for SOL amounts
-    if let Ok(sol_regex) = Regex::new(r"(\d+(?:\.\d+)?)\s*SOL") {
-        let mut sol_amounts = Vec::new();
-        for cap in sol_regex.captures_iter(text) {
-            if let Some(value) = cap.get(1) {
-                sol_amounts.push(format!("{} SOL", value.as_str()));
-            }
-        }
-        if !sol_amounts.is_empty() {
-            println!("    • SOL amounts: {}", sol_amounts.join(", "));
-        }
-    }
-
-    // Look for USDC amounts
-    if let Ok(usdc_regex) = Regex::new(r"(\d+(?:\.\d+)?)\s*USDC") {
-        let mut usdc_amounts = Vec::new();
-        for cap in usdc_regex.captures_iter(text) {
-            if let Some(value) = cap.get(1) {
-                usdc_amounts.push(format!("{} USDC", value.as_str()));
-            }
-        }
-        if !usdc_amounts.is_empty() {
-            println!("    • USDC amounts: {}", usdc_amounts.join(", "));
-        }
-    }
-
-    // Look for time values
-    if let Ok(time_regex) = Regex::new(r"(\d+)\s*(second|minute|hour|day)s?") {
-        let mut times = Vec::new();
-        for cap in time_regex.captures_iter(text) {
-            if let (Some(value), Some(unit)) = (cap.get(1), cap.get(2)) {
-                times.push(format!("{} {}", value.as_str(), unit.as_str()));
-            }
-        }
-        if !times.is_empty() {
-            println!("    • Time values: {}", times.join(", "));
-        }
-    }
-
-    // Look for addresses (Solana public keys)
-    if let Ok(address_regex) = Regex::new(r"[1-9A-HJ-NP-Za-km-z]{32,44}") {
-        let mut addresses = Vec::new();
-        for cap in address_regex.captures_iter(text) {
-            let addr = cap.get(0).unwrap().as_str();
-            if addr.len() >= 32 && addr.len() <= 44 {
-                addresses.push(format!("{}...{}", &addr[..8], &addr[addr.len()-4..]));
-            }
-        }
-        if !addresses.is_empty() && addresses.len() <= 10 {
-            println!("    • Potential addresses: {}", addresses.join(", "));
-        }
-    }
-}
-
-/// Extract trading rules from paragraphs
-fn extract_trading_rules(paragraphs: &[String]) {
-    let rule_keywords = vec![
-        "must", "should", "never", "always", "if", "when", "limit",
-        "maximum", "minimum", "stop", "exit", "enter"
-    ];
-
-    for paragraph in paragraphs {
-        let lower = paragraph.to_lowercase();
-        let rule_count = rule_keywords.iter()
-            .filter(|&&keyword| lower.contains(keyword))
-            .count();
-
-        if rule_count >= 2 { // Paragraph contains multiple rule keywords
-            let preview = if paragraph.len() > 150 {
-                format!("{}...", &paragraph[..150])
-            } else {
-                paragraph.clone()
-            };
-            println!("  • {}", preview);
-        }
-    }
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct Config {
-    rpc: RpcConfig,
-    wallet: WalletConfig,
-    dex: DexConfig,
-    limits: LimitsConfig,
-    execution: ExecutionConfig,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct RpcConfig {
-    url: String,
-    ws_url: String,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct WalletConfig {
-    path: String,
-    use_ledger: Option<bool>,
-    ledger_path: Option<String>,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct DexConfig {
-    raydium: DexInfo,
-    orca: DexInfo,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct DexInfo {
-    program_id: String,
-    sol_usdc_pool: String,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct LimitsConfig {
-    max_position_sol: f64,
-    min_profit_percent: f64,
-    min_profit_usd: f64,
-    max_slippage_percent: f64,
-    max_daily_loss_usd: f64,
-    max_daily_trades: u32,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct ExecutionConfig {
-    priority_fee_lamports: u64,
-    simulation_required: bool,
-    max_retries: u32,
 }

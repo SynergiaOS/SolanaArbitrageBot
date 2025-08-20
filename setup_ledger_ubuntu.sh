@@ -1,4 +1,4 @@
-#!/bin/bash
+_xccll       /bash
 
 # Ledger Nano S+ Setup dla Ubuntu 24.04
 # Kolory dla lepszej czytelności

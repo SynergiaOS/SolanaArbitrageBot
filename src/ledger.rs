@@ -1,70 +1,159 @@
-use anyhow::{anyhow, Result};
-use log::{debug, info};
+use anyhow::{anyhow, Context, Result};
+use log::{debug, info, warn, error};
 use solana_sdk::{
     derivation_path::DerivationPath,
     pubkey::Pubkey,
+    signature::Signature,
+    message::Message,
 };
+use solana_remote_wallet::{
+    ledger::LedgerWallet,
+    remote_wallet::RemoteWallet,
+};
+use std::rc::Rc;
+use tokio::time::Duration;
 
-/// Basic Ledger connection test and management
-/// This is a placeholder implementation for task 1 - basic infrastructure setup
+/// Real Ledger Hardware Wallet connection and management
 pub struct LedgerConnection {
+    wallet: Rc<LedgerWallet>,
     derivation_path: DerivationPath,
-    pubkey: Option<Pubkey>,
+    pubkey: Pubkey,
+    timeout_duration: Duration,
 }
 
 impl LedgerConnection {
     /// Create a new Ledger connection with the specified derivation path
-    /// This is a basic implementation that validates the derivation path
-    /// Full Ledger integration will be implemented in subsequent tasks
     pub async fn new(derivation_path_str: &str) -> Result<Self> {
-        info!("Setting up Ledger connection infrastructure...");
-        
-        // Parse derivation path to validate it
+        info!("🔐 Connecting to Ledger hardware wallet...");
+
+        // Parse derivation path
         let derivation_path = DerivationPath::from_absolute_path_str(derivation_path_str)
             .map_err(|e| anyhow!("Invalid derivation path '{}': {}", derivation_path_str, e))?;
-        
-        info!("Derivation path validated: {}", derivation_path_str);
-        info!("Note: Full Ledger hardware integration will be implemented in subsequent tasks");
-        
+
+        // Find Ledger devices using HID API
+        info!("Searching for Ledger devices...");
+
+        // Initialize HID API
+        let api = hidapi::HidApi::new()
+            .context("Failed to initialize HID API")?;
+
+        // Look for Ledger devices (vendor ID 0x2c97)
+        let devices: Vec<_> = api.device_list()
+            .filter(|device| device.vendor_id() == 0x2c97)
+            .collect();
+
+        if devices.is_empty() {
+            return Err(anyhow!(
+                "No Ledger devices found. Please:\n\
+                1. Connect your Ledger device\n\
+                2. Unlock it with your PIN\n\
+                3. Open the Solana app\n\
+                4. Ensure udev rules are installed (run ./setup_ledger.sh)"
+            ));
+        }
+
+        info!("Found {} Ledger device(s)", devices.len());
+
+        // Connect to first available Ledger
+        let device_info = devices[0];
+        info!("Connecting to Ledger: {} {}",
+              device_info.manufacturer_string().unwrap_or("Unknown"),
+              device_info.product_string().unwrap_or("Ledger"));
+
+        let hid_device = device_info.open_device(&api)
+            .context("Failed to open Ledger device")?;
+
+        let ledger_wallet = LedgerWallet::new(hid_device);
+
+        // Get public key
+        info!("Getting public key from Ledger...");
+        info!("Please approve the request on your Ledger device...");
+
+        let pubkey = ledger_wallet.get_pubkey(&derivation_path, false)
+            .context("Failed to get public key from Ledger")?;
+
+        info!("✅ Successfully connected to Ledger");
+        info!("Public key: {}", pubkey);
+        info!("Derivation path: {}", derivation_path_str);
+
         Ok(Self {
+            wallet: Rc::new(ledger_wallet),
             derivation_path,
-            pubkey: None, // Will be populated when hardware integration is complete
+            pubkey,
+            timeout_duration: Duration::from_secs(30),
         })
     }
     
 
-    
     /// Get the public key for this Ledger connection
-    pub fn get_pubkey(&self) -> Option<Pubkey> {
+    pub fn get_pubkey(&self) -> Pubkey {
         self.pubkey
     }
+
+    /// Sign a transaction message with the Ledger
+    pub fn sign_message(&self, message: &Message) -> Result<Signature> {
+        info!("🔐 Requesting signature from Ledger...");
+        info!("Please review and approve the transaction on your Ledger device");
+
+        let signature = self.wallet.sign_message(&self.derivation_path, &message.serialize())
+            .context("Failed to sign message with Ledger")?;
+
+        info!("✅ Transaction signed by Ledger");
+        Ok(signature)
+    }
     
-    /// Test basic connection health
-    /// This is a placeholder for the basic infrastructure setup
-    pub async fn health_check(&self) -> Result<()> {
-        debug!("Performing basic Ledger infrastructure health check...");
-        
-        // For now, just validate that the derivation path is still valid
-        // DerivationPath doesn't implement Display, so we'll check if it's valid differently
-        debug!("Derivation path is valid: {:?}", self.derivation_path);
-        
-        info!("Basic Ledger infrastructure health check passed");
-        info!("Note: Hardware health checks will be implemented in subsequent tasks");
+    /// Test Ledger connection health
+    pub fn health_check(&self) -> Result<()> {
+        debug!("Performing Ledger health check...");
+
+        // Try to get public key again to verify connection
+        let pubkey = self.wallet.get_pubkey(&self.derivation_path, false)
+            .context("Failed to communicate with Ledger during health check")?;
+
+        if pubkey != self.pubkey {
+            return Err(anyhow!("Ledger public key mismatch - device may have changed"));
+        }
+
+        info!("✅ Ledger health check passed");
         Ok(())
     }
     
-    /// Test signing capability (placeholder for basic infrastructure)
-    pub async fn test_signing(&self) -> Result<()> {
-        info!("Testing basic Ledger signing infrastructure...");
-        
-        // For now, just validate that we have the necessary components
-        debug!("Testing signing with derivation path: {:?}", self.derivation_path);
-        
-        info!("Basic signing infrastructure validated");
-        info!("Note: Actual hardware signing will be implemented in subsequent tasks");
-        info!("This would require user confirmation on the Ledger device");
-        
-        Ok(())
+    /// Test signing capability with a dummy message
+    pub fn test_signing(&self) -> Result<()> {
+        info!("Testing Ledger signing capability...");
+        info!("This will require approval on your Ledger device");
+
+        // Create a simple test message
+        use solana_sdk::{
+            instruction::Instruction,
+            system_instruction,
+            hash::Hash,
+        };
+
+        let test_instruction = system_instruction::transfer(
+            &self.pubkey,
+            &self.pubkey, // Send to self
+            1, // 1 lamport
+        );
+
+        let message = Message::new(
+            &[test_instruction],
+            Some(&self.pubkey),
+        );
+
+        // Try to sign (this will require user approval)
+        match self.sign_message(&message) {
+            Ok(signature) => {
+                info!("✅ Signing test successful");
+                info!("Test signature: {}", signature);
+                Ok(())
+            }
+            Err(e) => {
+                warn!("⚠️ Signing test failed: {}", e);
+                warn!("This is normal if you rejected the transaction on Ledger");
+                Err(e)
+            }
+        }
     }
     
     /// Get wallet information for debugging
@@ -73,10 +162,19 @@ impl LedgerConnection {
             "Ledger Connection Info:\n\
             - Public Key: {}\n\
             - Derivation Path: {:?}\n\
-            - Wallet Type: Ledger Hardware Wallet (Infrastructure Setup)",
-            self.pubkey.map_or("Not connected".to_string(), |pk| pk.to_string()),
-            self.derivation_path
+            - Wallet Type: Ledger Hardware Wallet\n\
+            - Timeout: {:?}\n\
+            - Status: Connected",
+            self.pubkey,
+            self.derivation_path,
+            self.timeout_duration
         )
+    }
+
+    /// Set timeout duration for Ledger operations
+    pub fn set_timeout(&mut self, timeout: Duration) {
+        self.timeout_duration = timeout;
+        info!("Ledger timeout set to {:?}", timeout);
     }
 }
 
@@ -92,11 +190,8 @@ pub async fn test_ledger_connection(derivation_path: Option<&str>) -> Result<()>
     let ledger = match LedgerConnection::new(path).await {
         Ok(ledger) => {
             println!("✅ Basic Ledger infrastructure setup completed");
-            if let Some(pubkey) = ledger.get_pubkey() {
-                println!("   Public Key: {}", pubkey);
-            } else {
-                println!("   Public Key: Will be available after hardware integration");
-            }
+            let pubkey = ledger.get_pubkey();
+            println!("   Public Key: {}", pubkey);
             ledger
         }
         Err(e) => {
@@ -107,7 +202,7 @@ pub async fn test_ledger_connection(derivation_path: Option<&str>) -> Result<()>
     
     // Step 2: Health check
     println!("\n2. Testing connection health...");
-    match ledger.health_check().await {
+    match ledger.health_check() {
         Ok(()) => println!("✅ Health check passed"),
         Err(e) => {
             println!("❌ Health check failed: {}", e);
@@ -119,7 +214,7 @@ pub async fn test_ledger_connection(derivation_path: Option<&str>) -> Result<()>
     println!("\n3. Testing signing capability...");
     println!("   Note: This will require confirmation on your Ledger device");
     
-    match ledger.test_signing().await {
+    match ledger.test_signing() {
         Ok(()) => println!("✅ Signing test passed"),
         Err(e) => {
             println!("❌ Signing test failed: {}", e);

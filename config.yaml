@@ -1,9 +1,9 @@
-# Solana Arbitrage Bot Configuration
+# Solana Arbitrage Bot Configuration - DEVNET
 
 rpc:
-  url: "https://api.mainnet-beta.solana.com"
-  ws_url: "wss://api.mainnet-beta.solana.com"
-  backup_url: "https://solana-api.projectserum.com"
+  url: "https://api.devnet.solana.com"
+  ws_url: "wss://api.devnet.solana.com"
+  backup_url: "https://devnet.helius-rpc.com"
 
 wallet:
   # PRODUKCJA: Użyj Ledger!
@@ -22,13 +22,13 @@ dex:
     sol_usdc_pool: "EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U"
 
 limits:
-  max_position_sol: 10.0          # Start small!
-  min_profit_percent: 0.3          # 0.3% minimum
-  min_profit_usd: 1.0              # Minimum $1 profit
-  max_slippage_percent: 0.5        # 0.5% max slippage
-  max_daily_loss_usd: 50.0         # Stop loss
-  max_daily_trades: 50              # Rate limit
-  min_pool_liquidity_usd: 10000.0  # Skip illiquid pools
+  max_position_sol: 0.5            # Small devnet positions
+  min_profit_percent: 0.1          # Lower threshold for testing
+  min_profit_usd: 0.10             # $0.10 minimum for devnet
+  max_slippage_percent: 1.0        # Higher slippage OK on devnet
+  max_daily_loss_usd: 10.0         # $10 max loss on devnet
+  max_daily_trades: 100            # More trades for testing
+  min_pool_liquidity_usd: 1000.0   # Lower liquidity requirements
 
 execution:
   priority_fee_lamports: 10000     # ~0.00001 SOL priority
@@ -36,6 +36,14 @@ execution:
   max_retries: 3
 
 monitoring:
-  log_level: "info"                # debug, info, warn, error
-  db_path: "./trades.db"
-  alert_profit_threshold_usd: 10.0 # Alert on big wins
+  log_level: "debug"               # More verbose for devnet testing
+  db_path: "./devnet_trades.db"
+  alert_profit_threshold_usd: 1.0  # Alert on smaller wins for testing
+
+# Discord Alerts
+discord:
+  webhook_url: "https://discordapp.com/api/webhooks/1407094459493122158/9Ju35aOQQk5MrqRe4Qj4hx6Y3lPmuq7zfswplBqtB34WBJ-2fXnRSq8C1kaP0VCY8nqG"
+  enabled: true
+  alert_on_profit: true
+  alert_on_error: true
+  alert_on_startup: true
