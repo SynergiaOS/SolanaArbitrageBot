@@ -1,0 +1,41 @@
+# Solana Arbitrage Bot Configuration
+
+rpc:
+  url: "https://api.mainnet-beta.solana.com"
+  ws_url: "wss://api.mainnet-beta.solana.com"
+  backup_url: "https://solana-api.projectserum.com"
+
+wallet:
+  # PRODUKCJA: Użyj Ledger!
+  use_ledger: false  # Zmień na true dla Ledger
+  ledger_path: "m/44'/501'/0'/0'"  # Standardowa ścieżka Solana
+  
+  # Fallback jeśli Ledger niedostępny (tylko do testów!)
+  path: "./wallet.json"
+
+dex:
+  raydium:
+    program_id: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"
+    sol_usdc_pool: "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2"
+  orca:
+    program_id: "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP"
+    sol_usdc_pool: "EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U"
+
+limits:
+  max_position_sol: 10.0          # Start small!
+  min_profit_percent: 0.3          # 0.3% minimum
+  max_slippage_percent: 0.5        # 0.5% max slippage
+  max_daily_loss_usd: 50.0         # Stop loss
+  max_daily_trades: 50              # Rate limit
+  min_pool_liquidity_usd: 10000.0  # Skip illiquid pools
+
+execution:
+  priority_fee_lamports: 10000     # ~0.00001 SOL priority
+  simulation_required: true         # Always simulate first
+  max_retries: 3
+  retry_delay_ms: 500
+
+monitoring:
+  log_level: "info"                # debug, info, warn, error
+  db_path: "./trades.db"
+  alert_profit_threshold_usd: 10.0 # Alert on big wins
