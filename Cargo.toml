@@ -36,6 +36,11 @@ env_logger = "0.11"
 rand = "0.8"  # Do symulacji cen
 futures-util = "0.3"
 
+# Document processing
+docx-rs = "0.4"  # Czytanie DOCX files
+zip = "0.6"      # DOCX to ZIP archive
+regex = "1.10"   # Pattern matching
+
 # Database
 rusqlite = { version = "0.32", features = ["bundled", "chrono"] }
 

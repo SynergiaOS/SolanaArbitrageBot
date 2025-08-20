@@ -13,6 +13,7 @@ mod calculator;
 mod executor;
 mod safety;
 mod ledger;
+mod docx_reader;
 
 use monitor::DexMonitor;
 use calculator::ProfitCalculator;
@@ -46,6 +47,10 @@ struct Args {
     /// Ledger derivation path for testing
     #[arg(long, default_value = "m/44'/501'/0'/0'")]
     ledger_path: String,
+
+    /// Read and analyze DOCX document
+    #[arg(long)]
+    read_docx: Option<String>,
 }
 
 #[derive(Clone)]
@@ -68,6 +73,21 @@ async fn main() -> Result<()> {
     info!("Network: {}", args.network);
     info!("Dry run: {}", args.dry_run);
     
+    // Handle DOCX reading
+    if let Some(docx_path) = args.read_docx {
+        info!("📄 Reading DOCX document: {}", docx_path);
+        match read_docx_document(&docx_path).await {
+            Ok(()) => {
+                info!("✅ DOCX analysis completed successfully");
+                return Ok(());
+            }
+            Err(e) => {
+                error!("❌ DOCX reading failed: {}", e);
+                return Err(e);
+            }
+        }
+    }
+
     // Handle Ledger connection test
     if args.test_ledger {
         info!("🔐 Testing Ledger connection...");
@@ -188,6 +208,180 @@ fn load_config(path: &str) -> Result<Config> {
         .build()?;
     
     Ok(settings.try_deserialize()?)
+}
+
+/// Read and analyze DOCX document for trading strategies
+async fn read_docx_document(path: &str) -> Result<()> {
+    use docx_reader::{DocxReader, TradingKeyword};
+
+    info!("📄 Analyzing DOCX document: {}", path);
+
+    // Create reader optimized for trading strategy documents
+    let reader = DocxReader::for_trading_strategy()
+        .with_tables(true)
+        .with_metadata(true)
+        .with_min_paragraph_length(15);
+
+    // Read the document
+    let content = reader.read_file(path).await?;
+
+    // Display summary
+    info!("📊 Document Summary:");
+    println!("{}", content.summary());
+
+    // Find trading-related keywords
+    let keywords = reader.find_trading_keywords(&content);
+
+    if !keywords.is_empty() {
+        info!("🔍 Trading Keywords Found:");
+        for keyword in keywords.iter().take(10) { // Show top 10
+            println!("  • {} ({}x)", keyword.keyword, keyword.count);
+            if !keyword.context.is_empty() {
+                println!("    Context: \"{}\"", keyword.context[0]);
+            }
+        }
+    }
+
+    // Search for specific trading terms
+    let important_terms = vec![
+        "arbitrage", "profit", "strategy", "risk", "SOL", "USDC",
+        "Raydium", "Orca", "trading", "bot"
+    ];
+
+    for term in important_terms {
+        let matches = content.search(term);
+        if !matches.is_empty() {
+            info!("🎯 Found '{}' in {} paragraphs:", term, matches.len());
+            for (i, paragraph) in matches.iter().take(3).enumerate() {
+                let preview = if paragraph.len() > 100 {
+                    format!("{}...", &paragraph[..100])
+                } else {
+                    paragraph.clone()
+                };
+                println!("  {}. {}", i + 1, preview);
+            }
+        }
+    }
+
+    // Extract potential configuration values
+    info!("⚙️ Potential Configuration Values:");
+    extract_config_values(&content.text);
+
+    // Extract trading rules
+    info!("📋 Potential Trading Rules:");
+    extract_trading_rules(&content.paragraphs);
+
+    Ok(())
+}
+
+/// Extract potential configuration values from text
+fn extract_config_values(text: &str) {
+    use regex::Regex;
+
+    println!("  📊 Numerical Values Found:");
+
+    // Look for percentage values
+    if let Ok(percent_regex) = Regex::new(r"(\d+(?:\.\d+)?)\s*%") {
+        let mut percentages = Vec::new();
+        for cap in percent_regex.captures_iter(text) {
+            if let Some(value) = cap.get(1) {
+                percentages.push(value.as_str());
+            }
+        }
+        if !percentages.is_empty() {
+            println!("    • Percentages: {}", percentages.join(", "));
+        }
+    }
+
+    // Look for dollar amounts
+    if let Ok(dollar_regex) = Regex::new(r"\$(\d+(?:\.\d+)?)") {
+        let mut dollars = Vec::new();
+        for cap in dollar_regex.captures_iter(text) {
+            if let Some(value) = cap.get(1) {
+                dollars.push(format!("${}", value.as_str()));
+            }
+        }
+        if !dollars.is_empty() {
+            println!("    • Dollar amounts: {}", dollars.join(", "));
+        }
+    }
+
+    // Look for SOL amounts
+    if let Ok(sol_regex) = Regex::new(r"(\d+(?:\.\d+)?)\s*SOL") {
+        let mut sol_amounts = Vec::new();
+        for cap in sol_regex.captures_iter(text) {
+            if let Some(value) = cap.get(1) {
+                sol_amounts.push(format!("{} SOL", value.as_str()));
+            }
+        }
+        if !sol_amounts.is_empty() {
+            println!("    • SOL amounts: {}", sol_amounts.join(", "));
+        }
+    }
+
+    // Look for USDC amounts
+    if let Ok(usdc_regex) = Regex::new(r"(\d+(?:\.\d+)?)\s*USDC") {
+        let mut usdc_amounts = Vec::new();
+        for cap in usdc_regex.captures_iter(text) {
+            if let Some(value) = cap.get(1) {
+                usdc_amounts.push(format!("{} USDC", value.as_str()));
+            }
+        }
+        if !usdc_amounts.is_empty() {
+            println!("    • USDC amounts: {}", usdc_amounts.join(", "));
+        }
+    }
+
+    // Look for time values
+    if let Ok(time_regex) = Regex::new(r"(\d+)\s*(second|minute|hour|day)s?") {
+        let mut times = Vec::new();
+        for cap in time_regex.captures_iter(text) {
+            if let (Some(value), Some(unit)) = (cap.get(1), cap.get(2)) {
+                times.push(format!("{} {}", value.as_str(), unit.as_str()));
+            }
+        }
+        if !times.is_empty() {
+            println!("    • Time values: {}", times.join(", "));
+        }
+    }
+
+    // Look for addresses (Solana public keys)
+    if let Ok(address_regex) = Regex::new(r"[1-9A-HJ-NP-Za-km-z]{32,44}") {
+        let mut addresses = Vec::new();
+        for cap in address_regex.captures_iter(text) {
+            let addr = cap.get(0).unwrap().as_str();
+            if addr.len() >= 32 && addr.len() <= 44 {
+                addresses.push(format!("{}...{}", &addr[..8], &addr[addr.len()-4..]));
+            }
+        }
+        if !addresses.is_empty() && addresses.len() <= 10 {
+            println!("    • Potential addresses: {}", addresses.join(", "));
+        }
+    }
+}
+
+/// Extract trading rules from paragraphs
+fn extract_trading_rules(paragraphs: &[String]) {
+    let rule_keywords = vec![
+        "must", "should", "never", "always", "if", "when", "limit",
+        "maximum", "minimum", "stop", "exit", "enter"
+    ];
+
+    for paragraph in paragraphs {
+        let lower = paragraph.to_lowercase();
+        let rule_count = rule_keywords.iter()
+            .filter(|&&keyword| lower.contains(keyword))
+            .count();
+
+        if rule_count >= 2 { // Paragraph contains multiple rule keywords
+            let preview = if paragraph.len() > 150 {
+                format!("{}...", &paragraph[..150])
+            } else {
+                paragraph.clone()
+            };
+            println!("  • {}", preview);
+        }
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]
