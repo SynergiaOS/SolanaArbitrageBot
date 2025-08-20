@@ -1,9 +1,14 @@
-use anyhow::{anyhow, Result};
-use log::{debug, info};
+use anyhow::{anyhow, Context, Result};
+use log::{debug, info, warn, error};
 use solana_sdk::{
     derivation_path::DerivationPath,
     pubkey::Pubkey,
+    signature::Signature,
+    transaction::Transaction,
+    message::Message,
 };
+use std::time::{Duration, Instant};
+use tokio::time::timeout;
 
 /// Basic Ledger connection test and management
 /// This is a placeholder implementation for task 1 - basic infrastructure setup

@@ -1,0 +1,76 @@
+# Snyk (https://snyk.io) policy file
+# Snyk configuration for Solana Arbitrage Bot
+
+# Language settings
+language-settings:
+  rust:
+    # Scan Cargo.toml and Cargo.lock
+    packageManager: cargo
+    
+# Patches to apply to vulnerabilities
+patches: {}
+
+# Vulnerabilities to ignore
+ignore:
+  # Example: Ignore specific vulnerability for 30 days
+  # SNYK-RUST-TOKIO-12345:
+  #   - '*':
+  #       reason: False positive - not applicable to our use case
+  #       expires: '2024-02-20T00:00:00.000Z'
+
+# Exclude paths from scanning
+exclude:
+  # Exclude test files and examples
+  - 'tests/**'
+  - 'examples/**'
+  - 'target/**'
+  - 'docs/**'
+  
+# Security policies
+security:
+  # Fail on high severity vulnerabilities
+  threshold: high
+  
+  # Monitor for new vulnerabilities
+  monitor: true
+  
+  # Include dev dependencies in scan
+  dev: true
+
+# License policies
+license:
+  # Allowed licenses for dependencies
+  allowed:
+    - MIT
+    - Apache-2.0
+    - BSD-2-Clause
+    - BSD-3-Clause
+    - ISC
+    - MPL-2.0
+  
+  # Disallowed licenses
+  disallowed:
+    - GPL-2.0
+    - GPL-3.0
+    - AGPL-1.0
+    - AGPL-3.0
+    - LGPL-2.0
+    - LGPL-2.1
+    - LGPL-3.0
+
+# Custom rules for Solana/DeFi specific security
+custom-rules:
+  # Private key handling
+  - pattern: "private_key|secret_key|wallet_key"
+    severity: critical
+    message: "Potential private key exposure detected"
+    
+  # RPC endpoint security
+  - pattern: "mainnet.*rpc|rpc.*mainnet"
+    severity: medium
+    message: "Mainnet RPC endpoint detected - ensure proper rate limiting"
+    
+  # Amount validation
+  - pattern: "unwrap.*amount|amount.*unwrap"
+    severity: high
+    message: "Unsafe amount handling - use proper error handling"

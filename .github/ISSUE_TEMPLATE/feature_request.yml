@@ -1,0 +1,159 @@
+name: ✨ Feature Request
+description: Suggest a new feature for the Solana Arbitrage Bot
+title: "[FEATURE] "
+labels: ["enhancement", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! ✨
+        
+        Please provide as much detail as possible to help us understand your request.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please verify these items before submitting
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate
+          required: true
+        - label: I have read the roadmap and this feature is not already planned
+          required: true
+        - label: This feature aligns with the project's goals and scope
+          required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feature Category
+      description: What type of feature is this?
+      options:
+        - Trading Strategy (New arbitrage methods)
+        - Security (Enhanced safety features)
+        - Performance (Speed/efficiency improvements)
+        - Monitoring (Better observability)
+        - Integration (New DEX/wallet support)
+        - User Experience (Easier configuration/usage)
+        - Analytics (Reporting/metrics)
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature?
+      options:
+        - Critical (Essential for production use)
+        - High (Important for most users)
+        - Medium (Nice to have)
+        - Low (Minor improvement)
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve?
+      placeholder: |
+        Describe the problem or limitation you're experiencing...
+        
+        Example: "Currently, the bot only supports SOL/USDC pairs, but I need to trade other tokens..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe your proposed solution
+      placeholder: |
+        Describe how you think this feature should work...
+        
+        Example: "Add support for configurable token pairs in config.yaml..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternative Solutions
+      description: Have you considered any alternative approaches?
+      placeholder: |
+        Describe any alternative solutions or workarounds you've considered...
+
+  - type: textarea
+    id: benefits
+    attributes:
+      label: Benefits
+      description: What are the benefits of implementing this feature?
+      placeholder: |
+        - Increased profit opportunities
+        - Better risk management
+        - Improved user experience
+        - etc.
+
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Implementation Ideas
+      description: Do you have ideas about how this could be implemented?
+      placeholder: |
+        If you have technical knowledge, share implementation ideas:
+        - Which modules would need changes?
+        - Any specific libraries or APIs to use?
+        - Potential challenges or considerations?
+
+  - type: textarea
+    id: examples
+    attributes:
+      label: Examples and Use Cases
+      description: Provide specific examples of how this feature would be used
+      placeholder: |
+        Example scenarios where this feature would be useful:
+        
+        1. When trading during high volatility...
+        2. For users with multiple Ledger devices...
+        3. etc.
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: How would you know this feature is complete?
+      placeholder: |
+        Define what "done" looks like:
+        
+        - [ ] Feature works as described
+        - [ ] Documentation is updated
+        - [ ] Tests are added
+        - [ ] Configuration is intuitive
+        - [ ] etc.
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Are you willing to help implement this feature?
+      options:
+        - label: I'm willing to submit a pull request for this feature
+        - label: I can help with testing
+        - label: I can help with documentation
+        - label: I can provide feedback during development
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other context, mockups, or references
+      placeholder: |
+        Add any other context:
+        - Links to similar features in other projects
+        - Mockups or diagrams
+        - Research or references
+        - etc.
