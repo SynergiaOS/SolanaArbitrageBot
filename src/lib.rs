@@ -7,6 +7,7 @@ pub mod executor;
 pub mod safety;
 pub mod ledger;
 pub mod discord;
+pub mod sniper;
 
 // Re-export main types
 pub use crate::monitor::{DexMonitor, PriceUpdate};
@@ -15,6 +16,9 @@ pub use crate::executor::{TransactionExecutor, WalletType};
 pub use crate::safety::SafetyGuard;
 pub use crate::ledger::LedgerConnection;
 pub use crate::discord::DiscordAlert;
+
+// Re-export sniper types
+pub use crate::sniper::{SniperEngine, SniperConfig, NewToken, TradeResult, Position, SafetyResult, SellAction};
 
 // Re-export config types
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -54,11 +58,16 @@ pub struct DexInfo {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct LimitsConfig {
-    pub max_position_sol: f64,
-    pub min_profit_percent: f64,
-    pub min_profit_usd: f64,
-    pub max_slippage_percent: f64,
-    pub max_daily_loss_usd: f64,
+    #[serde(with = "rust_decimal::serde::float")]
+    pub max_position_sol: rust_decimal::Decimal,
+    #[serde(with = "rust_decimal::serde::float")]
+    pub min_profit_percent: rust_decimal::Decimal,
+    #[serde(with = "rust_decimal::serde::float")]
+    pub min_profit_usd: rust_decimal::Decimal,
+    #[serde(with = "rust_decimal::serde::float")]
+    pub max_slippage_percent: rust_decimal::Decimal,
+    #[serde(with = "rust_decimal::serde::float")]
+    pub max_daily_loss_usd: rust_decimal::Decimal,
     pub max_daily_trades: u32,
 }
 
@@ -78,11 +87,15 @@ pub struct DiscordConfig {
     pub alert_on_startup: Option<bool>,
 }
 
+use rust_decimal::Decimal;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
 // Shared state type used in main
 #[derive(Clone)]
 pub struct SharedState {
-    pub raydium_price: std::sync::Arc<tokio::sync::Mutex<Option<f64>>>,
-    pub orca_price: std::sync::Arc<tokio::sync::Mutex<Option<f64>>>,
-    pub trades_today: std::sync::Arc<tokio::sync::Mutex<u32>>,
-    pub profit_today: std::sync::Arc<tokio::sync::Mutex<f64>>,
+    pub raydium_price: Arc<Mutex<Option<Decimal>>>,
+    pub orca_price: Arc<Mutex<Option<Decimal>>>,
+    pub trades_today: Arc<Mutex<u32>>,
+    pub profit_today: Arc<Mutex<Decimal>>,
 }

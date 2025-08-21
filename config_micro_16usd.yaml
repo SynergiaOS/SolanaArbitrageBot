@@ -1,0 +1,39 @@
+# 💸 Micro Capital Configuration - $16 Starting Capital
+# UWAGA: Bardzo ryzykowne, małe profity, ale możliwe do testowania!
+
+rpc:
+  url: "https://api.mainnet-beta.solana.com"
+  ws_url: "wss://api.mainnet-beta.solana.com"
+
+wallet:
+  use_ledger: false
+  path: "./wallet.json"
+
+dex:
+  raydium:
+    program_id: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"
+    sol_usdc_pool: "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2"
+  orca:
+    program_id: "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"
+    sol_usdc_pool: "HJPjoWUrhoZzkNfRpHuieeFk9WcZWjwy6PBjZ81ngndJ"
+
+limits:
+  # ULTRA SMALL POSITION SETTINGS
+  max_position_sol: 0.08          # Max 0.08 SOL (~$15)
+  min_profit_percent: 0.3          # Need higher % for tiny positions
+  min_profit_usd: 0.02             # Ultra low - $0.02 minimum
+  max_slippage_percent: 0.1        # Very tight slippage
+  max_daily_loss_usd: 5.0          # Max $5 loss (1/3 of capital)
+  max_daily_trades: 20             # Limited trades to save on gas
+
+execution:
+  priority_fee_lamports: 1000      # Minimum fee to save costs
+  simulation_required: false       # Skip to save time
+  max_retries: 1                   # Less retries to save gas
+
+# Special micro-capital settings
+micro_trading:
+  enabled: true
+  emergency_stop_at: 10.0          # Stop if balance < $10
+  gas_cost_threshold: 0.01         # Max gas cost per trade
+  require_2x_gas_coverage: true    # Profit must be 2x gas cost

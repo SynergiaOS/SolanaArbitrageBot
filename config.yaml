@@ -1,49 +1,60 @@
-# Solana Arbitrage Bot Configuration - DEVNET
+# Memecoin Sniper Bot Configuration - MAINNET
+# Czysta, bezpieczna konfiguracja dedykowana wyłącznie dla sniper bota
+# Sekcje: rpc, wallet, sniper, safety, risk, monitoring, discord
+
 
 rpc:
-  url: "https://api.devnet.solana.com"
-  ws_url: "wss://api.devnet.solana.com"
-  backup_url: "https://devnet.helius-rpc.com"
+  url: "https://api.mainnet-beta.solana.com"
+  ws_url: "wss://api.mainnet-beta.solana.com"
+  backup_url: "https://mainnet.helius-rpc.com"
 
 wallet:
-  # PRODUKCJA: Użyj Ledger!
-  use_ledger: false  # Zmień na true dla Ledger
-  ledger_path: "m/44'/501'/0'/0'"  # Standardowa ścieżka Solana
-  
-  # Fallback jeśli Ledger niedostępny (tylko do testów!)
-  path: "./wallet.json"
+  path: "./wallet.json"                            # Ścieżka do keypair (JSON). Nie commituj do repo!
 
-dex:
-  raydium:
-    program_id: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"
-    sol_usdc_pool: "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2"
-  orca:
-    program_id: "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP"
-    sol_usdc_pool: "EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U"
+# --- Ustawienia Sniper Bota (handel i wykonanie) ---
+sniper:
+  max_position_sol: 0.02                           # Maks. SOL na jeden snipe (bezpiecznie na start)
+  scan_interval_ms: 250                             # Częstotliwość skanowania (ms)
+  max_slippage_bps: 150                             # Maks. slippage 1.5% (150 bps)
+  priority_fee_lamports: 100000                     # Opłata priorytetowa (przyspiesza transakcje)
+  profit_target_percent: 200.0                      # Take profit przy +200% (x3)
+  stop_loss_percent: 50.0                           # Stop loss przy -50%
 
-limits:
-  max_position_sol: 0.5            # Small devnet positions
-  min_profit_percent: 0.1          # Lower threshold for testing
-  min_profit_usd: 0.10             # $0.10 minimum for devnet
-  max_slippage_percent: 1.0        # Higher slippage OK on devnet
-  max_daily_loss_usd: 10.0         # $10 max loss on devnet
-  max_daily_trades: 100            # More trades for testing
-  min_pool_liquidity_usd: 1000.0   # Lower liquidity requirements
+# --- Zasady bezpieczeństwa (filtry i weryfikacje) ---
+safety:
+  enable_safety_checks: true                        # Globalny włącznik filtrów bezpieczeństwa
+  min_liquidity_sol: 3.0                            # Minimalna płynność w poolu (SOL)
+  max_market_cap_usd: 100000.0                      # Maks. market cap tokena w USD
+  max_buy_tax_percent: 5.0                          # Maks. podatek kupna (procent)
+  max_sell_tax_percent: 5.0                         # Maks. podatek sprzedaży (procent)
+  max_dev_percentage: 30.0                          # Maks. % tokenów w rękach deva
+  min_holders: 10                                   # Min. liczba holderów
+  max_token_age_minutes: 8                          # Snajpuj tylko tokeny < 8 min od startu
+  blacklist_keywords: ["test", "fake", "scam", "rug", "honeypot"]  # Słowa kluczowe do odrzucenia
+  blacklist_mints: []                                # Czarna lista mintów (opcjonalnie)
+  blacklisted_creators:
+    - "Czv5xzTo1jcv4Z5w5Wg3J5q1ML5X3D2tTjv1Jx1Jx1Jx1"
+  honeypot_api: "https://api.honeypot.is/v2/IsHoneypot"  # API honeypot
+  rugcheck_api: "https://api.rugcheck.xyz/v1/tokens"     # API rugcheck
 
-execution:
-  priority_fee_lamports: 10000     # ~0.00001 SOL priority
-  simulation_required: true         # Always simulate first
-  max_retries: 3
+# --- Zarządzanie ryzykiem portfela ---
+risk:
+  max_daily_loss_sol: 0.5                           # Maks. dzienna strata (SOL)
+  max_open_positions: 3                             # Maks. liczba jednoczesnych pozycji
+  position_timeout_minutes: 60                      # Auto-sell po 60 minutach
 
+
+# --- Monitoring i logowanie ---
 monitoring:
-  log_level: "debug"               # More verbose for devnet testing
-  db_path: "./devnet_trades.db"
-  alert_profit_threshold_usd: 1.0  # Alert on smaller wins for testing
+  log_level: "info"                                 # Poziom logów: trace|debug|info|warn|error
+  db_path: "./sniper_trades.db"                    # Ścieżka do lokalnej bazy danych (opcjonalnie)
 
-# Discord Alerts
+# --- Powiadomienia Discord ---
 discord:
-  webhook_url: "https://discordapp.com/api/webhooks/1407094459493122158/9Ju35aOQQk5MrqRe4Qj4hx6Y3lPmuq7zfswplBqtB34WBJ-2fXnRSq8C1kaP0VCY8nqG"
   enabled: true
-  alert_on_profit: true
-  alert_on_error: true
-  alert_on_startup: true
+  webhook_url: "https://discordapp.com/api/webhooks/1407094459493122158/9Ju35aOQQk5MrqRe4Qj4hx6Y3lPmuq7zfswplBqtB34WBJ-2fXnRSq8C1kaP0VCY8nqG"
+  alert_on_snipe: true                              # Powiadomienie przy nowym snajpie
+  alert_on_profit: true                             # Powiadomienie przy take profit
+  alert_on_loss: true                               # Powiadomienie przy stop loss
+  alert_on_error: true                              # Błędy krytyczne
+  alert_on_startup: true                            # Start bota

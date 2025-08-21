@@ -130,6 +130,6 @@ Możesz go uruchomić i zacząć szukać prawdziwych okazji arbitrażowych na So
 
 ---
 
-**Ostatnia aktualizacja**: 2025-08-20  
+**Ostatnia aktualizacja**: 2024-01-20  
 **Wersja**: v2.0 - Real API Integration  
 **Status**: ✅ GOTOWY DO PRODUKCJI

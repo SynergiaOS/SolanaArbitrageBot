@@ -14,9 +14,11 @@ use solana_sdk::{
     compute_budget::ComputeBudgetInstruction,
     system_instruction,
 };
+use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use crate::calculator::ArbitrageOpportunity;
+use tokio::time::{sleep, Duration};
 
 // Token mint addresses
 const SOL_MINT: &str = "So11111111111111111111111111111111111111112";
@@ -377,6 +379,87 @@ impl TransactionExecutor {
         // Send transaction
         let signature = self.rpc_client.send_and_confirm_transaction(&transaction)?;
         Ok(signature)
+    }
+
+    pub async fn verify_transaction(&self, signature: &Signature) -> Result<f64> {
+        let wallet_pubkey = match &self.wallet {
+            WalletType::Keypair(kp) => kp.pubkey(),
+            WalletType::Ledger(_) => return Err(anyhow!("Ledger not yet implemented for verification")),
+        };
+
+        let mut attempts = 0;
+        let max_attempts = 30; // ~30 seconds timeout
+
+        info!("🔍 Verifying transaction on-chain: {}", signature);
+
+        loop {
+            if attempts >= max_attempts {
+                return Err(anyhow!("Transaction verification timed out for signature {}", signature));
+            }
+            attempts += 1;
+
+            match self.rpc_client.get_transaction(signature, UiTransactionEncoding::JsonParsed) {
+                Ok(tx) => {
+                    return self.parse_transaction_profit(tx, &wallet_pubkey, signature);
+                },
+                Err(e) => {
+                    debug!("Attempt {} to fetch transaction {}: {}. Retrying...", attempts, signature, e);
+                    sleep(Duration::from_millis(1000)).await;
+                }
+            }
+        }
+    }
+
+    fn parse_transaction_profit(
+        &self,
+        tx: EncodedConfirmedTransactionWithStatusMeta,
+        wallet_pubkey: &Pubkey,
+        signature: &Signature,
+    ) -> Result<f64> {
+        let meta = tx.transaction.meta.ok_or_else(|| anyhow!("Transaction metadata not found for signature {}", signature))?;
+
+        if let Some(err) = meta.err {
+            error!("❌ Transaction {} failed on-chain: {:?}", signature, err);
+            let fee_lamports = meta.fee;
+            // This is a simplification. We'd need SOL price for an accurate USD value.
+            // Returning a negative value representing the fee in SOL.
+            return Ok(-(fee_lamports as f64 / 1_000_000_000.0));
+        }
+
+        let usdc_mint_pubkey = Pubkey::from_str(USDC_MINT)?;
+
+        let pre_balances = meta.pre_token_balances.unwrap_or_default();
+        let post_balances = meta.post_token_balances.unwrap_or_default();
+
+        let pre_usdc_balance = pre_balances.iter()
+            .find(|balance|
+                balance.owner.as_deref().map_or(false, |owner| Pubkey::from_str(owner).unwrap_or_default() == *wallet_pubkey) &&
+                balance.mint == usdc_mint_pubkey.to_string()
+            )
+            .and_then(|balance| balance.ui_token_amount.amount.parse::<u64>().ok());
+
+        let post_usdc_balance = post_balances.iter()
+            .find(|balance|
+                balance.owner.as_deref().map_or(false, |owner| Pubkey::from_str(owner).unwrap_or_default() == *wallet_pubkey) &&
+                balance.mint == usdc_mint_pubkey.to_string()
+            )
+            .and_then(|balance| balance.ui_token_amount.amount.parse::<u64>().ok());
+
+        match (pre_usdc_balance, post_usdc_balance) {
+            (Some(pre), Some(post)) => {
+                let diff = post as i64 - pre as i64;
+                // USDC has 6 decimals
+                let actual_profit_usd = diff as f64 / 1_000_000.0;
+                info!("✅ Transaction {} verified. Pre-USDC: {}, Post-USDC: {}. Actual profit: ${:.4}", signature, pre, post, actual_profit_usd);
+                Ok(actual_profit_usd)
+            }
+            _ => {
+                warn!("Could not find USDC token balances for wallet {} in transaction {}. Assuming zero profit/loss from this tx.", wallet_pubkey, signature);
+                // This can happen in complex transactions (e.g. with temporary accounts).
+                // A zero profit is a safe assumption if we can't parse it, to avoid breaking the bot.
+                Ok(0.0)
+            }
+        }
     }
 }
 

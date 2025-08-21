@@ -233,36 +233,50 @@ async fn main() -> Result<()> {
                     match executor.execute_arbitrage(&opportunity).await {
                         Ok(signature) => {
                             trades_executed += 1;
-                            info!("✅ Trade #{} executed! Signature: {}", trades_executed, signature);
+                            info!("✅ Trade #{} sent! Signature: {}", trades_executed, signature);
 
-                            // Send Discord profit alert
-                            if let Some(ref discord_alert) = discord {
-                                if let Err(e) = discord_alert.send_profit_alert(
-                                    opportunity.profit_after_fees_usd,
-                                    &signature.to_string(),
-                                    &opportunity.buy_dex,
-                                    &opportunity.sell_dex,
-                                    opportunity.amount_sol
-                                ).await {
-                                    warn!("Failed to send Discord profit alert: {}", e);
+                            // --- NEW: On-chain verification ---
+                            match executor.verify_transaction(&signature).await {
+                                Ok(actual_profit) => {
+                                    // Send Discord profit alert with actual profit
+                                    if let Some(ref discord_alert) = discord {
+                                        if let Err(e) = discord_alert.send_profit_alert(
+                                            actual_profit,
+                                            &signature.to_string(),
+                                            &opportunity.buy_dex,
+                                            &opportunity.sell_dex,
+                                            opportunity.amount_sol
+                                        ).await {
+                                            warn!("Failed to send Discord profit alert: {}", e);
+                                        }
+                                    }
+
+                                    // Update statistics with actual profit
+                                    let mut trades = state.trades_today.lock().await;
+                                    *trades += 1;
+
+                                    let mut profit = state.profit_today.lock().await;
+                                    *profit += actual_profit;
+
+                                    // Record in safety system
+                                    safety.record_trade(
+                                        actual_profit,
+                                        opportunity.amount_sol,
+                                        actual_profit > 0.0
+                                    ).await;
+
+                                    info!("📊 Daily stats: {} trades, ${:.2} profit", *trades, *profit);
+                                }
+                                Err(e) => {
+                                    error!("❌ Transaction verification failed: {}. Assuming gas fee loss.", e);
+                                    // Record failure with estimated gas loss
+                                    safety.record_trade(
+                                        -opportunity.estimated_gas_sol * price_r, // Lost gas cost
+                                        opportunity.amount_sol,
+                                        false
+                                    ).await;
                                 }
                             }
-
-                            // Update statistics
-                            let mut trades = state.trades_today.lock().await;
-                            *trades += 1;
-
-                            let mut profit = state.profit_today.lock().await;
-                            *profit += opportunity.profit_after_fees_usd;
-
-                            // Record in safety system
-                            safety.record_trade(
-                                opportunity.profit_after_fees_usd,
-                                opportunity.amount_sol,
-                                true
-                            ).await;
-
-                            info!("📊 Daily stats: {} trades, ${:.2} profit", *trades, *profit);
                         }
                         Err(e) => {
                             error!("❌ Trade execution failed: {}", e);
