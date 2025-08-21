@@ -1,6 +1,6 @@
-# Analiza Bezpieczeństwa i Lista Zadań - SolanaArbitrageBot
+# 🔒 Analiza Bezpieczeństwa i Lista Zadań - SolanaArbitrageBot
 
-## Stan Obecny (Analiza Kodu)
+## 📊 Stan Obecny (Analiza Kodu)
 
 ### 1. SafetyGuard (src/safety.rs)
 - **Inicjalizacja**: Używa `config.limits.*` (nie pasuje do struktury config.yaml)
@@ -25,7 +25,7 @@
 - **Obecny**: Tylko pre-buy via Raydium logsSubscribe
 - **Brakuje**: Post-trade rug pull detection
 
-## Kluczowe Rozbieżności
+## ⚠️ Kluczowe Rozbieżności
 
 | Parametr | Config.yaml | Kod | Status |
 |----------|-------------|-----|--------|
@@ -37,27 +37,38 @@
 | Dev percentage | Zdefiniowany | Brak | ❌ Nieegzekwowany |
 | Token age | Zdefiniowany | Brak | ❌ Nieegzekwowany |
 
-## Duża Lista Zadań
+## 🎯 Priorytety Implementacji
 
-### A. Spójność Konfiguracji [WYSOKI PRIORYTET]
+**🔴 KRYTYCZNE** - Spójność config z kodem (bezpieczeństwo)
+**🟡 WYSOKIE** - Brakujące filtry safety (ochrona przed scamami)
+**🟢 ŚREDNIE** - Post-trade monitoring (rug pull detection)
+**🔵 NISKIE** - Optymalizacje i dokumentacja
+
+## 📋 Duża Lista Zadań
+
+### A. Spójność Konfiguracji [🔴 WYSOKI PRIORYTET]
 
 #### A1. Wczytywanie sekcji safety
+
 - [ ] Dodać `SafetySection` do `RootYamlConfig` w `src/bin/sniper.rs`
 - [ ] Mapować pola: `min_liquidity_sol`, `max_buy_tax_percent`, `max_sell_tax_percent`
 - [ ] Mapować: `max_market_cap_usd`, `max_dev_percentage`, `min_holders`, `max_token_age_minutes`
 - [ ] Mapować: `blacklist_mints`, `blacklisted_creators`, `honeypot_api`, `rugcheck_api`
 
 #### A2. Ujednolicenie progów
+
 - [ ] SafetyChecker używa `config.min_liquidity_sol` zamiast hard-coded 5 SOL
 - [ ] SafetyChecker używa `config.max_buy_tax_percent/max_sell_tax_percent` zamiast 10%
 - [ ] PositionManager używa `config.position_timeout_minutes` zamiast 60
 
 #### A3. Endpointy API z config
+
 - [ ] `check_honeypot_api()` używa `config.honeypot_api`
 - [ ] `check_token_taxes()` używa `config.rugcheck_api`
 - [ ] Fallback na domyślne URL gdy brak w config
 
 #### A4. Blacklisty z config
+
 - [ ] Inicjalizacja `blacklisted_creators` z config przy tworzeniu SafetyChecker
 - [ ] Inicjalizacja `blacklist_mints` z config
 - [ ] Ładowanie `blacklist_keywords` z config (+ domyślne)

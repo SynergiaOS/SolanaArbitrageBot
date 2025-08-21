@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use solana_client::rpc_client::RpcClient;
 use solana_client::pubsub_client::PubsubClient;
+use crate::utils::conversions::*;
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
 
@@ -108,7 +109,7 @@ impl DexMonitor {
     }
     
     async fn monitor_raydium_real(
-        price_state: Arc<Mutex<Option<f64>>>,
+        price_state: Arc<Mutex<Option<Decimal>>>,
         ws_url: String,
         price_tx: Option<tokio::sync::mpsc::Sender<PriceUpdate>>,
         pool_address: String,
@@ -131,7 +132,7 @@ impl DexMonitor {
     }
     
     async fn connect_and_monitor_raydium(
-        price_state: &Arc<Mutex<Option<f64>>>,
+        price_state: &Arc<Mutex<Option<Decimal>>>,
         ws_url: &str,
         price_tx: &Option<tokio::sync::mpsc::Sender<PriceUpdate>>,
         pool_address: &str,
@@ -154,20 +155,22 @@ impl DexMonitor {
                     if let Ok(text) = response.text().await {
                         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
                             if let Some(price_str) = json["data"]["attributes"]["base_token_price_usd"].as_str() {
-                                if let Ok(price) = price_str.parse::<f64>() {
+                                if let Ok(price_f64) = price_str.parse::<f64>() {
+                                    let price_decimal = f64_to_decimal(price_f64);
+
                                     // Update shared state
                                     let mut current_price = price_state.lock().await;
-                                    *current_price = Some(price);
+                                    *current_price = Some(price_decimal);
 
-                                    debug!("Raydium SOL/USDC: ${:.4}", price);
+                                    debug!("Raydium SOL/USDC: ${:.4}", price_f64);
 
                                     // Send price update if channel exists
                                     if let Some(tx) = price_tx {
                                         let update = PriceUpdate {
                                             dex: "Raydium".to_string(),
-                                            price,
-                                            volume_24h: 0.0,
-                                            liquidity: 0.0,
+                                            price: price_decimal,
+                                            volume_24h: Decimal::ZERO,
+                                            liquidity: Decimal::ZERO,
                                             timestamp: std::time::SystemTime::now()
                                                 .duration_since(std::time::UNIX_EPOCH)
                                                 .unwrap()
@@ -191,7 +194,7 @@ impl DexMonitor {
     }
     
     async fn monitor_orca_real(
-        price_state: Arc<Mutex<Option<f64>>>,
+        price_state: Arc<Mutex<Option<Decimal>>>,
         ws_url: String,
         price_tx: Option<tokio::sync::mpsc::Sender<PriceUpdate>>,
         pool_address: String,
@@ -214,7 +217,7 @@ impl DexMonitor {
     }
     
     async fn connect_and_monitor_orca(
-        price_state: &Arc<Mutex<Option<f64>>>,
+        price_state: &Arc<Mutex<Option<Decimal>>>,
         ws_url: &str,
         price_tx: &Option<tokio::sync::mpsc::Sender<PriceUpdate>>,
         pool_address: &str,
@@ -234,20 +237,22 @@ impl DexMonitor {
                     if let Ok(text) = response.text().await {
                         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
                             if let Some(price_str) = json["data"]["attributes"]["base_token_price_usd"].as_str() {
-                                if let Ok(price) = price_str.parse::<f64>() {
+                                if let Ok(price_f64) = price_str.parse::<f64>() {
+                                    let price_decimal = f64_to_decimal(price_f64);
+
                                     // Update shared state
                                     let mut current_price = price_state.lock().await;
-                                    *current_price = Some(price);
+                                    *current_price = Some(price_decimal);
 
-                                    debug!("Orca SOL/USDC: ${:.4}", price);
+                                    debug!("Orca SOL/USDC: ${:.4}", price_f64);
 
                                     // Send price update if channel exists
                                     if let Some(tx) = price_tx {
                                         let update = PriceUpdate {
                                             dex: "Orca".to_string(),
-                                            price,
-                                            volume_24h: 0.0,
-                                            liquidity: 0.0,
+                                            price: price_decimal,
+                                            volume_24h: Decimal::ZERO,
+                                            liquidity: Decimal::ZERO,
                                             timestamp: std::time::SystemTime::now()
                                                 .duration_since(std::time::UNIX_EPOCH)
                                                 .unwrap()

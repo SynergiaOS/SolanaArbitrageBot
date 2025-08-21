@@ -8,6 +8,7 @@ pub mod safety;
 pub mod ledger;
 pub mod discord;
 pub mod sniper;
+pub mod utils;
 
 // Re-export main types
 pub use crate::monitor::{DexMonitor, PriceUpdate};

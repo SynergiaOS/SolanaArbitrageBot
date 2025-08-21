@@ -11,23 +11,44 @@ wallet:
 # Sniper-specific settings
 sniper:
   max_position_sol: 0.05           # Max SOL per snipe (start small!)
-  min_liquidity_sol: 5.0           # Minimum pool liquidity
-  max_buy_tax: 5.0                 # Max 5% buy tax
-  max_sell_tax: 5.0                # Max 5% sell tax
   profit_target_percent: 200.0     # Take profit at 200% (3x)
   stop_loss_percent: 50.0          # Stop loss at -50%
-  max_market_cap: 100000.0         # Max $100k market cap
   scan_interval_ms: 250            # Scan every 250ms
-  
-  # Safety filters
-  max_dev_percentage: 30.0         # Max 30% dev holdings
-  min_holders: 10                  # Minimum number of holders
-  max_age_minutes: 5               # Only snipe tokens < 5 min old
-  
+
   # Advanced settings
   use_jupiter: true                # Use Jupiter for swaps
   priority_fee_lamports: 50000     # Higher priority for speed
   max_slippage_percent: 10.0       # Higher slippage for new tokens
+
+# Safety configuration - all security checks
+safety:
+  # Liquidity & Market Cap
+  min_liquidity_sol: 3.0           # Minimum pool liquidity (SOL)
+  max_market_cap_usd: 100000.0     # Max $100k market cap
+
+  # Tax limits
+  max_buy_tax_percent: 5.0         # Max 5% buy tax
+  max_sell_tax_percent: 5.0        # Max 5% sell tax
+
+  # Token age & holder requirements
+  max_token_age_minutes: 5         # Only snipe tokens < 5 min old
+  min_holders: 10                  # Minimum number of holders
+  max_dev_percentage: 30.0         # Max 30% dev holdings
+
+  # Blacklists
+  blacklist_mints: []              # Blacklisted token mints
+  blacklisted_creators: []         # Blacklisted creator addresses
+  blacklist_keywords:              # Forbidden in token name/symbol
+    - "test"
+    - "fake"
+    - "scam"
+    - "rug"
+    - "honeypot"
+
+  # API endpoints
+  honeypot_api: "https://api.honeypot.is/v2/IsHoneypot"
+  rugcheck_api: "https://api.rugcheck.xyz/v1/tokens"
+  enable_safety_checks: true       # Master switch for all safety checks
   
 # Target DEXes
 dex:
@@ -61,25 +82,6 @@ discord:
   alert_on_loss: true              # Alert on stop loss hit
   alert_on_new_token: false        # Don't spam on every new token
 
-# Honeypot detection APIs
-security:
-  honeypot_api: "https://api.honeypot.is/v2/IsHoneypot"
-  rugcheck_api: "https://api.rugcheck.xyz/v1/tokens"
-  enable_safety_checks: true
-  
-# Token filters
-filters:
-  # Blacklisted tokens (known scams)
-  blacklist:
-    - "11111111111111111111111111111111"  # System program
-    
-  # Required in token name/symbol (optional)
-  whitelist_keywords: []
-  
-  # Forbidden in token name/symbol
-  blacklist_keywords:
-    - "test"
-    - "fake" 
-    - "scam"
-    - "rug"
-    - "honeypot"
+# Legacy sections - moved to 'safety' above
+# security: (moved to safety section)
+# filters: (moved to safety section)

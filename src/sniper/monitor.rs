@@ -23,6 +23,8 @@ pub struct NewToken {
     pub pool_address: Pubkey,
     pub timestamp: u64,
     pub market_cap_estimate: f64,
+    pub liquidity_sol: f64,
+    pub liquidity_token: f64,
 }
 
 pub struct TokenMonitor {
@@ -148,6 +150,8 @@ impl TokenMonitor {
             pool_address: Pubkey::default(),
             timestamp: chrono::Utc::now().timestamp() as u64,
             market_cap_estimate: 0.0,
+            liquidity_sol: 0.0,
+            liquidity_token: 0.0,
         })
     }
     

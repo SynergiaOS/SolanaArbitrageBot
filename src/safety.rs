@@ -7,6 +7,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use chrono::{DateTime, Utc, Duration};
 use std::collections::VecDeque;
+use rust_decimal::Decimal;
+use crate::utils::conversions::*;
 
 #[derive(Clone)]
 pub struct SafetyGuard {
@@ -35,8 +37,8 @@ struct TradeRecord {
 impl SafetyGuard {
     pub fn new(config: &crate::Config) -> Self {
         Self {
-            max_position_sol: config.limits.max_position_sol,
-            max_daily_loss_usd: config.limits.max_daily_loss_usd,
+            max_position_sol: decimal_to_f64(config.limits.max_position_sol),
+            max_daily_loss_usd: decimal_to_f64(config.limits.max_daily_loss_usd),
             max_daily_trades: config.limits.max_daily_trades,
             min_pool_liquidity_usd: 50000.0, // Default minimum liquidity
             
@@ -60,8 +62,8 @@ impl SafetyGuard {
         }
         
         // Check daily loss limit
-        if profit_today < -self.max_daily_loss_usd {
-            error!("🛑 Daily loss limit exceeded: ${:.2}", profit_today);
+        if decimal_lt_f64(profit_today, -self.max_daily_loss_usd) {
+            error!("🛑 Daily loss limit exceeded: ${:.2}", decimal_to_f64(profit_today));
             return false;
         }
         
@@ -81,9 +83,10 @@ impl SafetyGuard {
         }
         
         // Check if we're near daily Ledger limit
-        if profit_today.abs() > self.ledger_daily_limit * 0.9 {
+        let profit_abs = decimal_to_f64(profit_today.abs());
+        if profit_abs > self.ledger_daily_limit * 0.9 {
             warn!("⚠️ Approaching daily Ledger limit: ${:.2}/{:.2}",
-                 profit_today.abs(), self.ledger_daily_limit);
+                 profit_abs, self.ledger_daily_limit);
         }
         
         true
@@ -167,7 +170,7 @@ impl SafetyGuard {
         *trades = 0;
         
         let mut profit = state.profit_today.lock().await;
-        *profit = 0.0;
+        *profit = Decimal::ZERO;
         
         info!("🔄 Daily limits reset");
     }

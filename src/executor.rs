@@ -4,6 +4,7 @@
 use anyhow::{Result, anyhow, Context};
 use log::{info, warn, error, debug};
 use solana_client::rpc_client::RpcClient;
+use crate::utils::conversions::*;
 use solana_sdk::{
     signature::{Keypair, Signature, Signer},
     transaction::Transaction,
@@ -147,7 +148,7 @@ impl TransactionExecutor {
             dry_run,
             priority_fee: config.execution.priority_fee_lamports,
             simulation_required: config.execution.simulation_required,
-            slippage_bps: (config.limits.max_slippage_percent * 100.0) as u16,
+            slippage_bps: (decimal_to_f64(config.limits.max_slippage_percent) * 100.0) as u16,
             http_client: reqwest::Client::new(),
         })
     }
@@ -172,7 +173,7 @@ impl TransactionExecutor {
             return Err(anyhow!("Invalid wallet size: expected 64 bytes, got {}", wallet_bytes.len()));
         }
         
-        let wallet = Keypair::from_bytes(&wallet_bytes)
+        let wallet = Keypair::try_from(&wallet_bytes[..])
             .map_err(|e| anyhow!("Invalid wallet format: {}", e))?;
         
         Ok(WalletType::Keypair(wallet))
@@ -428,19 +429,19 @@ impl TransactionExecutor {
 
         let usdc_mint_pubkey = Pubkey::from_str(USDC_MINT)?;
 
-        let pre_balances = meta.pre_token_balances.unwrap_or_default();
-        let post_balances = meta.post_token_balances.unwrap_or_default();
+        let pre_balances = meta.pre_token_balances.unwrap_or(vec![]);
+        let post_balances = meta.post_token_balances.unwrap_or(vec![]);
 
         let pre_usdc_balance = pre_balances.iter()
             .find(|balance|
-                balance.owner.as_deref().map_or(false, |owner| Pubkey::from_str(owner).unwrap_or_default() == *wallet_pubkey) &&
+                balance.owner.as_ref().map_or(false, |owner| Pubkey::from_str(owner).unwrap_or_default() == *wallet_pubkey) &&
                 balance.mint == usdc_mint_pubkey.to_string()
             )
             .and_then(|balance| balance.ui_token_amount.amount.parse::<u64>().ok());
 
         let post_usdc_balance = post_balances.iter()
             .find(|balance|
-                balance.owner.as_deref().map_or(false, |owner| Pubkey::from_str(owner).unwrap_or_default() == *wallet_pubkey) &&
+                balance.owner.as_ref().map_or(false, |owner| Pubkey::from_str(owner).unwrap_or_default() == *wallet_pubkey) &&
                 balance.mint == usdc_mint_pubkey.to_string()
             )
             .and_then(|balance| balance.ui_token_amount.amount.parse::<u64>().ok());
