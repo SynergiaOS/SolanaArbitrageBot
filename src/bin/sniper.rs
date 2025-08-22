@@ -150,7 +150,7 @@ struct SafetySection {
     max_market_cap_usd: Option<f64>,
     max_buy_tax_percent: Option<f64>,
     max_sell_tax_percent: Option<f64>,
-    max_token_age_minutes: Option<u64>,
+    max_token_age_minutes: Option<u32>,
     min_holders: Option<u32>,
     max_dev_percentage: Option<f64>,
 

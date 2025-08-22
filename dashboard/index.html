@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Solana Arbitrage Bot Dashboard</title>
+  <style>
+    body { background: #0b1220; color: #e5e7eb; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Noto Sans, "Apple Color Emoji", "Segoe UI Emoji"; }
+    .container { max-width: 960px; margin: 2rem auto; padding: 1rem; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
+    .row { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .grow { flex: 1 1 300px; }
+    .status { color: #10b981; }
+    .error { color: #ef4444; }
+    button { background:#1f2937; color:#e5e7eb; border:1px solid #374151; padding:0.5rem 0.75rem; border-radius: 8px; }
+    button:hover { background:#374151; }
+    canvas { background:#0b1220; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Solana Arbitrage Bot Dashboard</h1>
+    <div id="status" class="card">Connecting...</div>
+    <div class="row">
+      <div class="card grow">
+        <h3>Prices (Raydium vs Orca)</h3>
+        <canvas id="priceChart" height="200"></canvas>
+      </div>
+      <div class="card grow">
+        <h3>Controls</h3>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+          <button onclick="control('start')">Start</button>
+          <button onclick="control('pause')">Pause</button>
+          <button onclick="control('stop')">Stop</button>
+          <button onclick="control('emergency')" style="border-color:#ef4444;color:#ef4444">Emergency Stop</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const statusEl = document.getElementById('status');
+  const labels = [];
+  const raydiumData = [];
+  const orcaData = [];
+  const ctx = document.getElementById('priceChart').getContext('2d');
+  const priceChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Raydium', data: raydiumData, borderColor: '#60a5fa', tension: 0.2 },
+        { label: 'Orca', data: orcaData, borderColor: '#34d399', tension: 0.2 },
+      ]
+    },
+    options: { animation:false, scales:{ x:{ ticks:{ color:'#9ca3af' }}, y:{ ticks:{ color:'#9ca3af' }} } }
+  });
+
+  function addPoint(ts, r, o) {
+    labels.push(new Date(ts).toLocaleTimeString());
+    raydiumData.push(r);
+    orcaData.push(o);
+    if (labels.length > 100) { labels.shift(); raydiumData.shift(); orcaData.shift(); }
+    priceChart.update();
+  }
+
+  function control(action) {
+    fetch(`/api/control/${action}`, { method:'POST' })
+      .then(r => r.json()).then(j => console.log(j))
+      .catch(e => console.error(e));
+  }
+
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+    ws.onopen = () => { statusEl.textContent = 'Connected'; statusEl.className = 'card status'; };
+    ws.onclose = () => { statusEl.textContent = 'Disconnected'; statusEl.className = 'card error'; setTimeout(connect, 2000); };
+    ws.onerror = () => { statusEl.textContent = 'Error'; statusEl.className = 'card error'; };
+
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'price_update') {
+          const p = msg.PriceUpdate || msg.price_update; // support both shapes
+          addPoint(p.timestamp, parseFloat(p.raydium_price), parseFloat(p.orca_price));
+        } else if (msg.type === 'bot_status') {
+          // could update UI
+        }
+      } catch (e) { console.error(e); }
+    };
+  }
+
+  connect();
+</script>
+</body>
+</html>
+

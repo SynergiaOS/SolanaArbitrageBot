@@ -118,6 +118,26 @@ async fn main() -> Result<()> {
         None
     };
 
+    // Setup Web Dashboard
+    let web_server = if let Some(web_config) = &config.web {
+        if web_config.enabled {
+            match web::WebServer::new(state.clone(), web_config.clone(), discord.clone()).await {
+                Ok(server) => {
+                    info!("🌐 Web dashboard initialized");
+                    Some(server)
+                }
+                Err(e) => {
+                    error!("Failed to initialize web dashboard: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     // Send startup alert
     if let Some(ref discord_alert) = discord {
         let wallet_addr = executor.get_wallet_address();
@@ -129,8 +149,36 @@ async fn main() -> Result<()> {
         ).await {
             warn!("Failed to send Discord startup alert: {}", e);
         }
+
+        // Send dashboard status alert
+        if web_server.is_some() {
+            if let Err(e) = discord_alert.send_error_alert(
+                "Web dashboard started successfully",
+                "Dashboard is now available for monitoring and control"
+            ).await {
+                warn!("Failed to send dashboard status alert: {}", e);
+            }
+        }
     }
     
+    // Get WebSocket sender and database references before moving web_server
+    let (websocket_tx, web_db) = if let Some(ref web_server) = web_server {
+        (Some(web_server.get_websocket_sender()), Some(web_server.get_database()))
+    } else {
+        (None, None)
+    };
+
+    // Start web server in background
+    let web_handle = if let Some(web_server) = web_server {
+        Some(tokio::spawn(async move {
+            if let Err(e) = web_server.start().await {
+                error!("Web server error: {}", e);
+            }
+        }))
+    } else {
+        None
+    };
+
     // Start monitoring in background
     let monitor_handle = tokio::spawn(async move {
         if let Err(e) = monitor.start_monitoring().await {
@@ -140,6 +188,7 @@ async fn main() -> Result<()> {
     
     // Start price update handler
     let discord_clone = discord.clone();
+    let websocket_tx_clone = websocket_tx.clone();
     let price_handler = tokio::spawn(async move {
         let mut last_discord_update = std::time::Instant::now();
         let mut raydium_price = Decimal::ZERO;
@@ -153,6 +202,23 @@ async fn main() -> Result<()> {
                 raydium_price = update.price;
             } else if update.dex == "Orca" {
                 orca_price = update.price;
+            }
+
+            // Send WebSocket price update to dashboard
+            if raydium_price > Decimal::ZERO && orca_price > Decimal::ZERO {
+                if let Some(ref ws_tx) = websocket_tx_clone {
+                    let spread_percent = ((orca_price - raydium_price).abs() / raydium_price) * Decimal::from(100);
+                    let price_update = web::PriceUpdate {
+                        timestamp: chrono::Utc::now(),
+                        raydium_price,
+                        orca_price,
+                        spread_percent,
+                    };
+                    let ws_msg = web::WebSocketMessage::PriceUpdate(price_update);
+                    if let Err(e) = ws_tx.send(ws_msg) {
+                        warn!("Failed to send WebSocket price update: {}", e);
+                    }
+                }
             }
 
             // Send Discord price update every 30 seconds (to avoid spam)
@@ -259,6 +325,43 @@ async fn main() -> Result<()> {
 
                                     let mut profit = state.profit_today.lock().await;
                                     *profit += f64_to_decimal(actual_profit);
+
+                                    // Broadcast to dashboard and store in DB
+                                    if let Some(ref ws_tx) = websocket_tx {
+                                        let price_update = web::WebSocketMessage::Transaction(web::TransactionRecord {
+                                            id: None,
+                                            timestamp: chrono::Utc::now(),
+                                            signature: signature.to_string(),
+                                            buy_dex: opportunity.buy_dex.clone(),
+                                            sell_dex: opportunity.sell_dex.clone(),
+                                            amount_sol: f64_to_decimal(opportunity.amount_sol),
+                                            profit_usd: f64_to_decimal(actual_profit),
+                                            raydium_price: raydium.unwrap_or(Decimal::ZERO),
+                                            orca_price: orca.unwrap_or(Decimal::ZERO),
+                                            spread_percent: Decimal::ZERO,
+                                            gas_fee: Decimal::ZERO,
+                                        });
+                                        let _ = ws_tx.send(price_update);
+                                    }
+
+                                    if let Some(ref db) = web_db {
+                                        let record = web::TransactionRecord {
+                                            id: None,
+                                            timestamp: chrono::Utc::now(),
+                                            signature: signature.to_string(),
+                                            buy_dex: opportunity.buy_dex.clone(),
+                                            sell_dex: opportunity.sell_dex.clone(),
+                                            amount_sol: f64_to_decimal(opportunity.amount_sol),
+                                            profit_usd: f64_to_decimal(actual_profit),
+                                            raydium_price: raydium.unwrap_or(Decimal::ZERO),
+                                            orca_price: orca.unwrap_or(Decimal::ZERO),
+                                            spread_percent: Decimal::ZERO,
+                                            gas_fee: Decimal::ZERO,
+                                        };
+                                        if let Err(e) = db.insert_transaction(&record).await {
+                                            warn!("Failed to store transaction: {}", e);
+                                        }
+                                    }
 
                                     // Record in safety system
                                     safety.record_trade(

@@ -9,6 +9,7 @@ pub mod ledger;
 pub mod discord;
 pub mod sniper;
 pub mod utils;
+pub mod web;
 
 // Re-export main types
 pub use crate::monitor::{DexMonitor, PriceUpdate};
@@ -17,6 +18,7 @@ pub use crate::executor::{TransactionExecutor, WalletType};
 pub use crate::safety::SafetyGuard;
 pub use crate::ledger::LedgerConnection;
 pub use crate::discord::DiscordAlert;
+pub use crate::web::{WebServer, WebConfig};
 
 // Re-export sniper types
 pub use crate::sniper::{SniperEngine, SniperConfig, NewToken, TradeResult, Position, SafetyResult, SellAction};
@@ -30,6 +32,7 @@ pub struct Config {
     pub limits: LimitsConfig,
     pub execution: ExecutionConfig,
     pub discord: Option<DiscordConfig>,
+    pub web: Option<WebConfig>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
