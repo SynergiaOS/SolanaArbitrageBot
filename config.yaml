@@ -58,3 +58,34 @@ discord:
   alert_on_loss: true                               # Powiadomienie przy stop loss
   alert_on_error: true                              # Błędy krytyczne
   alert_on_startup: true                            # Start bota
+
+# --- Arbitrage Bot Configuration ---
+# Sekcje wymagane dla arbitrage bota (solana-arbitrage-bot)
+dex:
+  raydium:
+    program_id: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"
+    sol_usdc_pool: "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2"
+  orca:
+    program_id: "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"
+    sol_usdc_pool: "HJPjoWUrhoZzkNfRpHuieeFk9WcZWjwy6PBjZ81ngndJ"
+
+limits:
+  max_position_sol: 0.08                            # Maks. pozycja SOL dla arbitrażu
+  min_profit_percent: 0.3                           # Min. zysk w procentach
+  min_profit_usd: 0.02                              # Min. zysk w USD
+  max_slippage_percent: 0.5                         # Maks. slippage dla arbitrażu
+  max_daily_loss_usd: 5.0                           # Maks. dzienna strata USD
+  max_daily_trades: 30                              # Maks. transakcji dziennie
+
+execution:
+  priority_fee_lamports: 5000                       # Opłata priorytetowa dla arbitrażu
+  simulation_required: true                         # Wymagaj symulacji przed wykonaniem
+  max_retries: 3                                    # Maks. liczba ponownych prób
+
+# --- Web Dashboard ---
+web:
+  enabled: true
+  host: "127.0.0.1"
+  port: 3001
+  auth_token: "your-secret-token-here"              # Opcjonalny token autoryzacji
+  database_path: "./data/dashboard.db"              # Ścieżka do bazy danych dashboard

@@ -9,6 +9,15 @@ wallet:
   use_ledger: false
   path: "./wallet.json"
 
+
+# Web dashboard
+web:
+  enabled: true
+  host: "127.0.0.1"
+  port: 3001
+  auth_token: "dev-token"
+  database_path: "./dashboard.db"
+
 dex:
   raydium:
     program_id: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"

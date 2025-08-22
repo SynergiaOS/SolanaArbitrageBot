@@ -17,6 +17,61 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use anyhow::Result;
 use log::{info, error, warn};
 use tokio::sync::mpsc;
+use serde::Deserialize;
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SafetyConfig {
+    // Liquidity & Market Cap
+    pub min_liquidity_sol: f64,
+    pub max_market_cap_usd: f64,
+
+    // Taxes
+    pub max_buy_tax_percent: f64,
+    pub max_sell_tax_percent: f64,
+
+    // Token Age & Holders
+    pub max_token_age_minutes: u32,
+    pub min_holders: u32,
+    pub max_dev_percentage: f64,
+
+    // Blacklists
+    pub blacklist_mints: Vec<String>,
+    pub blacklisted_creators: Vec<String>,
+    pub blacklist_keywords: Vec<String>,
+
+    // API Endpoints
+    pub honeypot_api: Option<String>,
+    pub rugcheck_api: Option<String>,
+    pub helius_api_key: Option<String>,
+    pub enable_safety_checks: bool,
+}
+
+impl Default for SafetyConfig {
+    fn default() -> Self {
+        Self {
+            min_liquidity_sol: 3.0,
+            max_market_cap_usd: 100_000.0,
+            max_buy_tax_percent: 5.0,
+            max_sell_tax_percent: 5.0,
+            max_token_age_minutes: 60,
+            min_holders: 10,
+            max_dev_percentage: 30.0,
+            blacklist_mints: vec![],
+            blacklisted_creators: vec![],
+            blacklist_keywords: vec![
+                "test".to_string(),
+                "fake".to_string(),
+                "scam".to_string(),
+                "rug".to_string(),
+                "honeypot".to_string(),
+            ],
+            honeypot_api: Some("https://api.honeypot.is/v2/IsHoneypot".to_string()),
+            rugcheck_api: Some("https://api.rugcheck.xyz/v1/tokens".to_string()),
+            helius_api_key: None,
+            enable_safety_checks: true,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct SniperConfig {
@@ -30,6 +85,7 @@ pub struct SniperConfig {
     pub scan_interval_ms: u64,
     pub max_slippage_bps: u16,
     pub priority_fee_lamports: u64,
+    pub position_timeout_minutes: u64,
 }
 
 impl Default for SniperConfig {
@@ -45,6 +101,7 @@ impl Default for SniperConfig {
             scan_interval_ms: 250,
             max_slippage_bps: 1000, // 10%
             priority_fee_lamports: 100_000,
+            position_timeout_minutes: 60,
         }
     }
 }
@@ -53,6 +110,7 @@ pub struct SniperEngine {
     keypair: Arc<Keypair>,
     rpc_client: Arc<RpcClient>,
     config: SniperConfig,
+    safety_config: SafetyConfig,
     token_monitor: TokenMonitor,
     trade_executor: TradeExecutor,
     safety_checker: SafetyChecker,
@@ -66,6 +124,7 @@ impl SniperEngine {
         rpc_url: String,
         ws_url: String,
         config: SniperConfig,
+        safety_config: SafetyConfig,
         dry_run: bool,
     ) -> Self {
         let rpc_client = Arc::new(RpcClient::new(rpc_url));
@@ -76,13 +135,15 @@ impl SniperEngine {
             rpc_client.clone(),
             "https://quote-api.jup.ag/v6".to_string(),
         );
-        let safety_checker = SafetyChecker::new();
+        // Przekaż safety_config do SafetyChecker
+        let safety_checker = SafetyChecker::from_config(&safety_config, rpc_client.clone());
         let position_manager = PositionManager::new(config.clone());
-        
+
         Self {
             keypair,
             rpc_client,
             config,
+            safety_config,
             token_monitor,
             trade_executor,
             safety_checker,

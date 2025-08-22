@@ -252,3 +252,22 @@ impl DiscordAlert {
         Ok(()) // Don't fail the whole bot for Discord issues
     }
 }
+
+impl DiscordAlert {
+    pub async fn send_dashboard_status(&self, event: &str, info: &str) -> Result<()> {
+        if !self.enabled { return Ok(()); }
+        let color = match event { "connected" => 3066993, "disconnected" => 15158332, _ => 3447003 };
+        let message = serde_json::json!({
+            "embeds": [{
+                "title": "🌐 Dashboard Status",
+                "color": color,
+                "fields": [
+                    { "name": "Event", "value": event, "inline": true },
+                    { "name": "Info", "value": info, "inline": false }
+                ],
+                "timestamp": chrono::Utc::now().to_rfc3339(),
+            }]
+        });
+        self.send_webhook(message).await
+    }
+}

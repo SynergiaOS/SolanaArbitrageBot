@@ -50,8 +50,8 @@ impl ProfitCalculator {
     pub fn new(config: &crate::Config) -> Self {
         Self {
             gas_cost_sol: dec!(0.00025), // Base gas cost
-            min_profit_percent: Decimal::from_f64(config.limits.min_profit_percent).unwrap(),
-            max_slippage_percent: Decimal::from_f64(config.limits.max_slippage_percent).unwrap(),
+            min_profit_percent: config.limits.min_profit_percent,
+            max_slippage_percent: config.limits.max_slippage_percent,
             dex_fee_percent: dec!(0.0025), // 0.25% typical DEX fee
             jupiter_fee_percent: dec!(0.0), // Jupiter doesn't charge fees
             priority_fee_multiplier: 1.0,

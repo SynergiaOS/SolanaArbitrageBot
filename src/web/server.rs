@@ -1,0 +1,154 @@
+//! Web server implementation using Axum
+
+use anyhow::Result;
+use axum::{
+    extract::State,
+    http::{HeaderValue, Method},
+    response::Html,
+    routing::{get, post},
+    Router,
+};
+use log::{info, error};
+use std::sync::Arc;
+use tokio::sync::broadcast;
+use tower::ServiceBuilder;
+use tower_http::{
+    cors::{Any, CorsLayer},
+    services::ServeDir,
+};
+
+use crate::SharedState;
+use super::{
+    handlers,
+    websocket,
+    auth,
+    database::Database,
+    WebConfig,
+    WebSocketMessage,
+};
+
+/// Shared application state for the web server
+#[derive(Clone)]
+pub struct AppState {
+    pub bot_state: SharedState,
+    pub database: Arc<Database>,
+    pub websocket_tx: broadcast::Sender<WebSocketMessage>,
+    pub config: WebConfig,
+    pub bot_start_time: std::time::Instant,
+    pub bot_running: Arc<tokio::sync::RwLock<bool>>,
+    pub discord: Option<crate::discord::DiscordAlert>,
+}
+
+/// Web server for the dashboard
+pub struct WebServer {
+    app_state: AppState,
+}
+
+impl WebServer {
+    /// Create a new web server instance
+    pub async fn new(
+        bot_state: SharedState,
+        config: WebConfig,
+        discord: Option<crate::discord::DiscordAlert>,
+    ) -> Result<Self> {
+        // Initialize database
+        let database = Arc::new(Database::new(&config.database_path).await?);
+        
+        // Create WebSocket broadcast channel
+        let (websocket_tx, _) = broadcast::channel(1000);
+        
+        let app_state = AppState {
+            bot_state,
+            database,
+            websocket_tx,
+            config,
+            bot_start_time: std::time::Instant::now(),
+            bot_running: Arc::new(tokio::sync::RwLock::new(true)),
+            discord,
+        };
+
+        Ok(Self { app_state })
+    }
+
+    /// Start the web server
+    pub async fn start(self) -> Result<()> {
+        let config = self.app_state.config.clone();
+        
+        if !config.enabled {
+            info!("🌐 Web dashboard is disabled");
+            return Ok(());
+        }
+
+        info!("🌐 Starting web dashboard on {}:{}", config.host, config.port);
+
+        // Build CORS layer
+        let cors = CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+            .allow_headers(Any);
+
+        // Build the router
+        let app = Router::new()
+            // API routes
+            .route("/api/status", get(handlers::get_bot_status))
+            .route("/api/config", get(handlers::get_bot_config))
+            .route("/api/config", post(handlers::update_bot_config))
+            .route("/api/transactions", get(handlers::get_transactions))
+            .route("/api/stats", get(handlers::get_daily_stats))
+            .route("/api/control/start", post(handlers::start_bot))
+            .route("/api/control/stop", post(handlers::stop_bot))
+            .route("/api/control/pause", post(handlers::pause_bot))
+            .route("/api/control/emergency", post(handlers::emergency_stop))
+            
+            // WebSocket endpoint
+            .route("/ws", get(websocket::websocket_handler))
+            
+            // Static files and dashboard
+            .route("/", get(serve_dashboard))
+            .nest_service("/static", ServeDir::new("dashboard/dist"))
+            
+            // Add middleware
+            .layer(
+                ServiceBuilder::new()
+                    .layer(cors)
+                    .layer(auth::auth_middleware(config.auth_token.clone()))
+            )
+            .with_state(self.app_state);
+
+        // Create listener
+        let listener = tokio::net::TcpListener::bind(format!("{}:{}", config.host, config.port)).await?;
+        
+        info!("✅ Web dashboard started at http://{}:{}", config.host, config.port);
+        info!("📊 Dashboard URL: http://{}:{}/", config.host, config.port);
+        
+        // Start the server
+        axum::serve(listener, app).await?;
+        
+        Ok(())
+    }
+
+    /// Get the WebSocket sender for broadcasting messages
+    pub fn get_websocket_sender(&self) -> broadcast::Sender<WebSocketMessage> {
+        self.app_state.websocket_tx.clone()
+    }
+
+    /// Get the database reference
+    pub fn get_database(&self) -> Arc<Database> {
+        self.app_state.database.clone()
+    }
+}
+
+/// Serve the main dashboard HTML
+async fn serve_dashboard() -> Html<&'static str> {
+    Html(include_str!("../../dashboard/index.html"))
+}
+
+/// Broadcast a WebSocket message to all connected clients
+pub async fn broadcast_websocket_message(
+    sender: &broadcast::Sender<WebSocketMessage>,
+    message: WebSocketMessage,
+) {
+    if let Err(e) = sender.send(message) {
+        error!("Failed to broadcast WebSocket message: {}", e);
+    }
+}
