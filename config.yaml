@@ -9,7 +9,10 @@ rpc:
   backup_url: "https://mainnet.helius-rpc.com"
 
 wallet:
-  path: "./wallet.json"                            # Ścieżka do keypair (JSON). Nie commituj do repo!
+  path: "./wallet.json"                            # Backup - NIE UŻYWAĆ!
+  use_ledger: false                                # TYMCZASOWO: hot wallet dla testów
+  ledger_path: "44'/501'/0'/0'"                   # Derivation path
+  ledger_address: "9PdJZJh33TsMB6s3DuhSXYCSpUiM3oBqyuno2aLvYTk"  # AKTYWNY adres Ledger (0.18992 SOL)
 
 # --- Ustawienia Sniper Bota (handel i wykonanie) ---
 sniper:
@@ -36,6 +39,7 @@ safety:
     - "Czv5xzTo1jcv4Z5w5Wg3J5q1ML5X3D2tTjv1Jx1Jx1Jx1"
   honeypot_api: "https://api.honeypot.is/v2/IsHoneypot"  # API honeypot
   rugcheck_api: "https://api.rugcheck.xyz/v1/tokens"     # API rugcheck
+  helius_api_key: ""                                      # Helius API key dla lepszego wykrywania (opcjonalne)
 
 # --- Zarządzanie ryzykiem portfela ---
 risk:
@@ -86,6 +90,6 @@ execution:
 web:
   enabled: true
   host: "127.0.0.1"
-  port: 3001
+  port: 3002
   auth_token: "your-secret-token-here"              # Opcjonalny token autoryzacji
   database_path: "./data/dashboard.db"              # Ścieżka do bazy danych dashboard

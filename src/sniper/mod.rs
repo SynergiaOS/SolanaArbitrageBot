@@ -5,19 +5,21 @@ pub mod monitor;
 pub mod executor;
 pub mod safety;
 pub mod position;
+pub mod rug_monitor;
 
 pub use monitor::{TokenMonitor, NewToken};
 pub use executor::{TradeExecutor, TradeResult, TradeParams};
 pub use safety::{SafetyChecker, SafetyResult};
 pub use position::{PositionManager, Position, SellAction};
+pub use rug_monitor::{RugMonitor, RugMonitorConfig, RugAlert, MonitoredPosition};
 
 use std::sync::Arc;
 use solana_sdk::signature::Keypair;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use anyhow::Result;
 use log::{info, error, warn};
-use tokio::sync::mpsc;
 use serde::Deserialize;
+use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct SafetyConfig {
@@ -42,20 +44,20 @@ pub struct SafetyConfig {
     // API Endpoints
     pub honeypot_api: Option<String>,
     pub rugcheck_api: Option<String>,
-    pub helius_api_key: Option<String>,
+    pub helius_api_key: Option<String>, // DODANE: Dla lepszego wykrywania zagrożeń
     pub enable_safety_checks: bool,
 }
 
 impl Default for SafetyConfig {
     fn default() -> Self {
         Self {
-            min_liquidity_sol: 3.0,
-            max_market_cap_usd: 100_000.0,
-            max_buy_tax_percent: 5.0,
-            max_sell_tax_percent: 5.0,
-            max_token_age_minutes: 60,
-            min_holders: 10,
-            max_dev_percentage: 30.0,
+            min_liquidity_sol: 3.0,        // KRYTYCZNE: Minimalna płynność dla bezpieczeństwa
+            max_market_cap_usd: 100_000.0, // KRYTYCZNE: Ograniczenie market cap
+            max_buy_tax_percent: 5.0,      // KRYTYCZNE: Maksymalny podatek kupna
+            max_sell_tax_percent: 5.0,     // KRYTYCZNE: Maksymalny podatek sprzedaży
+            max_token_age_minutes: 8,      // KRYTYCZNE: Tylko tokeny < 8 min (z config.yaml)
+            min_holders: 10,               // KRYTYCZNE: Minimalna liczba holderów
+            max_dev_percentage: 30.0,      // KRYTYCZNE: Maksymalny % dewelopera
             blacklist_mints: vec![],
             blacklisted_creators: vec![],
             blacklist_keywords: vec![
@@ -67,8 +69,8 @@ impl Default for SafetyConfig {
             ],
             honeypot_api: Some("https://api.honeypot.is/v2/IsHoneypot".to_string()),
             rugcheck_api: Some("https://api.rugcheck.xyz/v1/tokens".to_string()),
-            helius_api_key: None,
-            enable_safety_checks: true,
+            helius_api_key: None, // DODANE: Domyślnie None, można skonfigurować w config.yaml
+            enable_safety_checks: true,    // KRYTYCZNE: Safety checks zawsze włączone
         }
     }
 }
@@ -115,6 +117,7 @@ pub struct SniperEngine {
     trade_executor: TradeExecutor,
     safety_checker: SafetyChecker,
     position_manager: PositionManager,
+    rug_monitor: Arc<Mutex<RugMonitor>>,
     dry_run: bool,
 }
 
@@ -138,6 +141,8 @@ impl SniperEngine {
         // Przekaż safety_config do SafetyChecker
         let safety_checker = SafetyChecker::from_config(&safety_config, rpc_client.clone());
         let position_manager = PositionManager::new(config.clone());
+        // Inicjalizuj RugMonitor dla post-trade bezpieczeństwa
+        let rug_monitor = Arc::new(Mutex::new(RugMonitor::new(rpc_client.clone())));
 
         Self {
             keypair,
@@ -148,6 +153,7 @@ impl SniperEngine {
             trade_executor,
             safety_checker,
             position_manager,
+            rug_monitor,
             dry_run,
         }
     }
@@ -171,9 +177,10 @@ impl SniperEngine {
         // Start monitoring tasks
         let token_scanner = self.start_token_scanner();
         let position_monitor = self.start_position_monitor();
-        
-        // Run both tasks concurrently
-        tokio::try_join!(token_scanner, position_monitor)?; // run both loops
+        let rug_monitor_task = self.start_rug_monitoring();
+
+        // Run all tasks concurrently
+        tokio::try_join!(token_scanner, position_monitor, rug_monitor_task)?; // run all loops
         
         Ok(())
     }
@@ -236,8 +243,16 @@ impl SniperEngine {
                     trade_result.output_amount,
                     trade_result.signature,
                 );
-                
-                self.position_manager.add_position(position).await;
+
+                self.position_manager.add_position(position.clone()).await;
+
+                // KRYTYCZNE: Rozpocznij monitoring rug pull po zakupie
+                let mut rug_monitor = self.rug_monitor.lock().await;
+                if let Err(e) = rug_monitor.start_monitoring(position, token.clone()).await {
+                    error!("❌ Failed to start rug monitoring for {}: {}", token.mint, e);
+                } else {
+                    info!("🛡️ Rug monitoring started for position: {}", token.mint);
+                }
             }
             Err(e) => {
                 error!("❌ Snipe failed: {}", e);
@@ -262,7 +277,7 @@ impl SniperEngine {
     
     async fn monitor_positions(&self) -> Result<()> {
         let positions = self.position_manager.get_active_positions().await;
-        
+
         for position in positions {
             match self.position_manager.check_sell_conditions(&position, &self.config).await { // includes timeout
                 Some(SellAction::TakeProfit) => {
@@ -282,8 +297,54 @@ impl SniperEngine {
                 }
             }
         }
-        
+
         Ok(())
+    }
+
+    async fn start_rug_monitoring(&self) -> Result<()> {
+        info!("🛡️ Starting rug pull monitoring...");
+
+        loop {
+            let mut rug_monitor = self.rug_monitor.lock().await;
+            // Check all monitored positions for rug pull indicators
+            match rug_monitor.check_all_positions().await {
+                Ok(alerts) => {
+                    for (mint, alert) in alerts {
+                        match alert {
+                            crate::sniper::rug_monitor::RugAlert::LiquidityDrain { drop_percent, .. } => {
+                                if drop_percent >= 30.0 {
+                                    warn!("🚨 RUG PULL ALERT: {} - Liquidity dropped by {:.1}%", mint, drop_percent);
+                                    if let Err(e) = rug_monitor.emergency_sell(&mint, "Liquidity drain detected").await {
+                                        error!("❌ Emergency sell failed: {}", e);
+                                    }
+                                }
+                            }
+                            crate::sniper::rug_monitor::RugAlert::AuthorityChanged { .. } => {
+                                warn!("🚨 RUG PULL ALERT: {} - Authority changed!", mint);
+                                if let Err(e) = rug_monitor.emergency_sell(&mint, "Authority changed").await {
+                                    error!("❌ Emergency sell failed: {}", e);
+                                }
+                            }
+                            crate::sniper::rug_monitor::RugAlert::TaxIncreased { .. } => {
+                                warn!("🚨 RUG PULL ALERT: {} - Taxes increased!", mint);
+                                if let Err(e) = rug_monitor.emergency_sell(&mint, "Taxes increased").await {
+                                    error!("❌ Emergency sell failed: {}", e);
+                                }
+                            }
+                            crate::sniper::rug_monitor::RugAlert::FailedTransaction { error } => {
+                                warn!("🚨 TRANSACTION ALERT: {} - Failed: {}", mint, error);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("❌ Rug monitoring error: {}", e);
+                }
+            }
+
+            // Check every 5 seconds
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+        }
     }
     
     async fn execute_sell(&self, position: &Position, reason: &str) -> Result<()> {

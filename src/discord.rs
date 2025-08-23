@@ -189,7 +189,7 @@ impl DiscordAlert {
             return Ok(());
         }
 
-        let spread = ((orca_price - raydium_price).abs() / raydium_price * 100.0);
+        let spread = (orca_price - raydium_price).abs() / raydium_price * 100.0;
         
         let message = json!({
             "embeds": [{

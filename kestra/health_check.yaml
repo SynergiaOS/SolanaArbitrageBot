@@ -1,0 +1,48 @@
+id: health_check
+namespace: arbitrage
+description: Periodic health check with alerts
+tasks:
+  - id: check_status
+    type: io.kestra.plugin.scripts.shell
+    commands:
+      - >
+        curl -s -f "http://${{ envs.BOT_HOST }}:${{ envs.BOT_PORT }}/api/status"
+        -H "Authorization: Bearer ${{ envs.AUTH_TOKEN }}"
+        -o status.json
+
+  - id: assert_running
+    type: io.kestra.plugin.scripts.shell
+    commands:
+      - >
+        jq -e '.data.running == true' status.json > /dev/null
+    onFailure:
+      - id: discord_alert
+        type: io.kestra.plugin.scripts.shell
+        commands:
+          - >
+            curl -s -X POST "${{ envs.DISCORD_WEBHOOK_URL }}"
+            -H "Content-Type: application/json"
+            -d '{"content":"❌ Bot not running or /api/status failed on ${{ envs.BOT_HOST }}:${{ envs.BOT_PORT }}"}'
+      - id: telegram_alert
+        type: io.kestra.plugin.scripts.shell
+        disabled: "${{ envs.TELEGRAM_DISABLED }}"
+        commands:
+          - >
+            curl -s -X POST "https://api.telegram.org/bot${{ envs.TELEGRAM_BOT_TOKEN }}/sendMessage"
+            -d "chat_id=${{ envs.TELEGRAM_CHAT_ID }}"
+            -d "text=❌ Bot health check failed"
+
+triggers:
+  - id: every_minute
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "*/1 * * * *"
+
+envs:
+  BOT_HOST: "127.0.0.1"
+  BOT_PORT: "3001"
+  AUTH_TOKEN: "your-secret-token-here"
+  DISCORD_WEBHOOK_URL: "https://discordapp.com/api/webhooks/..."
+  TELEGRAM_BOT_TOKEN: ""
+  TELEGRAM_CHAT_ID: ""
+  TELEGRAM_DISABLED: "true"
+

@@ -1,0 +1,37 @@
+id: daily_reset
+namespace: arbitrage
+description: Daily reset of bot stats and soft restart
+tasks:
+  - id: stop_bot
+    type: io.kestra.plugin.scripts.shell
+    commands:
+      - >
+        curl -s -X POST "http://${{ envs.BOT_HOST }}:${{ envs.BOT_PORT }}/api/control/pause"
+        -H "Authorization: Bearer ${{ envs.AUTH_TOKEN }}"
+
+  - id: reset_sqlite_stats
+    type: io.kestra.plugin.scripts.shell
+    commands:
+      - >
+        sqlite3 "${{ envs.DB_PATH }}"
+        "INSERT OR REPLACE INTO bot_stats (date,trades_count,total_profit_usd,total_volume_sol,avg_profit_per_trade,win_rate_percent,updated_at)
+         VALUES (date('now'),0,'0','0','0','0',CURRENT_TIMESTAMP);"
+
+  - id: start_bot
+    type: io.kestra.plugin.scripts.shell
+    commands:
+      - >
+        curl -s -X POST "http://${{ envs.BOT_HOST }}:${{ envs.BOT_PORT }}/api/control/start"
+        -H "Authorization: Bearer ${{ envs.AUTH_TOKEN }}"
+
+triggers:
+  - id: every_midnight
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 0 * * *"
+
+envs:
+  BOT_HOST: "127.0.0.1"
+  BOT_PORT: "3001"
+  AUTH_TOKEN: "your-secret-token-here"
+  DB_PATH: "./data/dashboard.db"
+

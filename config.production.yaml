@@ -1,0 +1,55 @@
+# Solana Arbitrage Bot - Production Configuration (Mainnet)
+# NOTE: Sensitive values should be provided via environment variables (see .env.example)
+# Environment overrides supported using prefix BOT__ and separator __ (e.g. BOT__WEB__AUTH_TOKEN)
+
+rpc:
+  # Will be overridden by BOT__RPC__URL and BOT__RPC__WS_URL if set
+  url: "https://api.mainnet-beta.solana.com"
+  ws_url: "wss://api.mainnet-beta.solana.com"
+
+wallet:
+  # Path to keypair. DO NOT COMMIT REAL KEYS.
+  path: "./wallet.json"                            # BACKUP ONLY - DO NOT USE!
+  use_ledger: true                                 # PRODUCTION: ALWAYS USE LEDGER!
+  ledger_path: "44'/501'/0'/0'"                   # Derivation path
+  ledger_address: "9PdJZJh33TsMB6s3DuhSXYCSpUiM3oBqyuno2aLvYTk"  # AKTYWNY adres Ledger (0.18992 SOL)
+
+# DEX programs (mainnet)
+dex:
+  raydium:
+    program_id: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"
+    sol_usdc_pool: "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2"
+  orca:
+    program_id: "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"
+    sol_usdc_pool: "HJPjoWUrhoZzkNfRpHuieeFk9WcZWjwy6PBjZ81ngndJ"
+
+# Trading and risk limits (conservative defaults for production start)
+limits:
+  max_position_sol: 0.05          # Max SOL per trade
+  min_profit_percent: 0.30         # 0.30% target
+  min_profit_usd: 0.05             # $0.05 minimal profit filter
+  max_slippage_percent: 0.50       # 0.50% slippage
+  max_daily_loss_usd: 10.0         # Stop for the day after -$10
+  max_daily_trades: 50             # Trades per day
+
+execution:
+  priority_fee_lamports: 10000     # Priority fee
+  simulation_required: true        # Always simulate in prod
+  max_retries: 3
+
+web:
+  enabled: true
+  host: "0.0.0.0"
+  port: 3001
+  # Use BOT__WEB__AUTH_TOKEN to override
+  auth_token: null
+  database_path: "./data/dashboard.db"
+
+# Optional: Discord alerts (prefer ENV overrides)
+discord:
+  enabled: true
+  webhook_url: ""   # Set DISCORD_WEBHOOK_URL env
+  alert_on_profit: true
+  alert_on_error: true
+  alert_on_startup: true
+

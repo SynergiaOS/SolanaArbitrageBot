@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Base tokens */
+  --background: #0b0f14; /* bg */
+  --foreground: #e5e7eb; /* text */
+  --panel: #0f141b;
+  --border: #1b2633;
+  --primary: #10b981; /* emerald */
 }
 
 @theme inline {
@@ -12,15 +16,19 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background:
+    radial-gradient(60% 40% at 0% 0%, rgba(16,185,129,0.12), transparent),
+    radial-gradient(40% 30% at 100% 0%, rgba(16,185,129,0.08), transparent),
+    var(--background);
+  color: var(--foreground);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/***** helpers *****/
+..card {
+  background: color-mix(in oklab, var(--panel), #0b0f14 60%);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  backdrop-filter: saturate(120%) blur(6px);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
 }

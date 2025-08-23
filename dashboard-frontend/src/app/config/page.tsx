@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getApiBase } from "@/lib/api";
 
 interface BotConfig {
   min_profit_usd: number;
@@ -18,7 +19,8 @@ export default function ConfigPage() {
 
   const fetchConfig = async () => {
     try {
-      const response = await fetch('/api/config', {
+      const url = `${getApiBase()}/api/config`;
+      const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -37,12 +39,13 @@ export default function ConfigPage() {
 
   const saveConfig = async () => {
     if (!config) return;
-    
+
     setSaving(true);
     setMessage(null);
-    
+
     try {
-      const response = await fetch('/api/config', {
+      const url = `${getApiBase()}/api/config`;
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -50,7 +53,7 @@ export default function ConfigPage() {
         },
         body: JSON.stringify(config)
       });
-      
+
       if (response.ok) {
         setMessage('Configuration saved successfully!');
         setTimeout(() => setMessage(null), 3000);

@@ -5,11 +5,14 @@ use tokio::time::{sleep, Duration};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Discord Alerts Demo");
     
-    let discord = DiscordAlert::new(
-        "https://discordapp.com/api/webhooks/1407094459493122158/9Ju35aOQQk5MrqRe4Qj4hx6Y3lPmuq7zfswplBqtB34WBJ-2fXnRSq8C1kaP0VCY8nqG".to_string(),
-        true
-    );
-    
+    let webhook = std::env::var("DISCORD_WEBHOOK_URL")
+        .expect("Set DISCORD_WEBHOOK_URL to test Discord alerts");
+    let enabled = std::env::var("DISCORD_ENABLED").ok()
+        .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "True"))
+        .unwrap_or(true);
+
+    let discord = DiscordAlert::new(webhook, enabled);
+
     println!("📢 Sending startup alert...");
     discord.send_startup_alert(
         "GedVmbHnUpRoqxWSxLwDMQNY5bmggTjRojoCY6u31VGS",

@@ -117,19 +117,27 @@ impl<T> ApiResponse<T> {
 pub enum WebSocketMessage {
     #[serde(rename = "price_update")]
     PriceUpdate(PriceUpdate),
-    
+
     #[serde(rename = "bot_status")]
     BotStatus(BotStatus),
-    
+
     #[serde(rename = "transaction")]
     Transaction(TransactionRecord),
-    
+
+    #[serde(rename = "config_update")]
+    ConfigUpdate {
+        timestamp: DateTime<Utc>,
+        source: String,
+        old: BotConfig,
+        new: BotConfig,
+    },
+
     #[serde(rename = "error")]
     Error { message: String },
-    
+
     #[serde(rename = "ping")]
     Ping,
-    
+
     #[serde(rename = "pong")]
     Pong,
 }

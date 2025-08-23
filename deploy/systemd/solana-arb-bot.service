@@ -1,0 +1,24 @@
+[Unit]
+Description=Solana Arbitrage Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/solana-arb-bot
+# Load environment from file (created from .env)
+EnvironmentFile=/opt/solana-arb-bot/.env
+ExecStart=/usr/bin/env bash -lc 'RUST_LOG=${RUST_LOG:-info} /usr/bin/cargo run --release -- --config ./config.production.yaml'
+Restart=on-failure
+RestartSec=5
+# Limit resources as needed
+# MemoryMax=1G
+# CPUQuota=80%
+
+# User/Group
+User=solana
+Group=solana
+
+[Install]
+WantedBy=multi-user.target
+

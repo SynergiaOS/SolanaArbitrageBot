@@ -5,14 +5,12 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     transaction::Transaction,
     pubkey::Pubkey,
-    program_pack::Pack,
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
 use reqwest::Client;
 use anyhow::{Result, anyhow};
-use log::{info, error, debug};
+use log::{info, debug};
 use std::sync::Arc;
-use std::str::FromStr;
 use serde_json::Value;
 
 pub struct TradeExecutor {
@@ -204,9 +202,10 @@ impl TradeExecutor {
             .as_str()
             .ok_or_else(|| anyhow!("No swapTransaction in response"))?;
             
-        let transaction_bytes = base64::decode(transaction_data)?;
+        use base64::{engine::general_purpose, Engine as _};
+        let transaction_bytes = general_purpose::STANDARD.decode(transaction_data)?;
         let transaction: Transaction = bincode::deserialize(&transaction_bytes)?;
-        
+
         Ok(transaction)
     }
     

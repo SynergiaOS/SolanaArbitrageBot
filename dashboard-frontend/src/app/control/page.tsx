@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getApiBase } from "@/lib/api";
 
 interface BotStatus {
   status: string;
@@ -17,7 +18,8 @@ export default function ControlPage() {
 
   const fetchStatus = async () => {
     try {
-      const response = await fetch('/api/status', {
+      const url = `${getApiBase()}/api/status`;
+      const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -39,11 +41,12 @@ export default function ControlPage() {
   const executeControl = async (action: string) => {
     setLoading(action);
     try {
-      const response = await fetch(`/api/control/${action}`, {
+      const url = `${getApiBase()}/api/control/${action}`;
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       if (response.ok) {
         await fetchStatus(); // Refresh status after action
       } else {

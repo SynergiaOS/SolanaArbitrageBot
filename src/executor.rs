@@ -1,25 +1,26 @@
 //! Transaction Executor with Jupiter Integration
-//! Executes arbitrage trades using Jupiter aggregator for best routing
+//! Optimized for high-frequency arbitrage execution with async operations and retry logic
 
 use anyhow::{Result, anyhow, Context};
 use log::{info, warn, error, debug};
-use solana_client::rpc_client::RpcClient;
+use solana_client::nonblocking::rpc_client::RpcClient; // Changed to nonblocking
 use crate::utils::conversions::*;
 use solana_sdk::{
     signature::{Keypair, Signature, Signer},
     transaction::Transaction,
     pubkey::Pubkey,
-    instruction::Instruction,
     commitment_config::CommitmentConfig,
     message::Message,
     compute_budget::ComputeBudgetInstruction,
-    system_instruction,
 };
-use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
-use std::str::FromStr;
+use solana_transaction_status::UiTransactionEncoding;
+use base64::Engine;
+use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use crate::calculator::ArbitrageOpportunity;
-use tokio::time::{sleep, Duration};
+use tokio::time::{sleep, Duration, Instant};
+use std::sync::Arc;
 
 // Token mint addresses
 const SOL_MINT: &str = "So11111111111111111111111111111111111111112";
@@ -99,13 +100,18 @@ struct JupiterSwapResponse {
 }
 
 pub struct TransactionExecutor {
-    rpc_client: RpcClient,
+    rpc_client: Arc<RpcClient>, // Wrapped in Arc for sharing
     wallet: WalletType,
     dry_run: bool,
     priority_fee: u64,
     simulation_required: bool,
     slippage_bps: u16,
     http_client: reqwest::Client,
+
+    // Performance tracking
+    execution_count: std::sync::atomic::AtomicU64,
+    total_execution_time_ms: std::sync::atomic::AtomicU64,
+    success_count: std::sync::atomic::AtomicU64,
 }
 
 impl TransactionExecutor {
@@ -124,24 +130,31 @@ impl TransactionExecutor {
         } else {
             Self::setup_keypair_wallet(&config.wallet.path)?
         };
-        
-        // Create RPC client
-        let rpc_client = RpcClient::new_with_commitment(
+
+        // Create async RPC client with optimized settings
+        let rpc_client = Arc::new(RpcClient::new_with_commitment(
             config.rpc.url.clone(),
             CommitmentConfig::confirmed(),
-        );
-        
+        ));
+
         let pubkey = match &wallet {
             WalletType::Keypair(kp) => kp.pubkey(),
             WalletType::Ledger(_) => {
                 return Err(anyhow!("Ledger not yet fully implemented"));
             }
         };
-        
+
         info!("💳 Wallet loaded: {}", pubkey);
         info!("🌐 RPC endpoint: {}", config.rpc.url);
         info!("🏃 Mode: {}", if dry_run { "DRY RUN" } else { "LIVE TRADING" });
-        
+
+        // Create optimized HTTP client
+        let http_client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .pool_idle_timeout(Duration::from_secs(30))
+            .pool_max_idle_per_host(10)
+            .build()?;
+
         Ok(Self {
             rpc_client,
             wallet,
@@ -149,8 +162,32 @@ impl TransactionExecutor {
             priority_fee: config.execution.priority_fee_lamports,
             simulation_required: config.execution.simulation_required,
             slippage_bps: (decimal_to_f64(config.limits.max_slippage_percent) * 100.0) as u16,
-            http_client: reqwest::Client::new(),
+            http_client,
+            execution_count: std::sync::atomic::AtomicU64::new(0),
+            total_execution_time_ms: std::sync::atomic::AtomicU64::new(0),
+            success_count: std::sync::atomic::AtomicU64::new(0),
         })
+    }
+
+    /// Get performance statistics
+    pub fn get_performance_stats(&self) -> (u64, f64, f64) {
+        let executions = self.execution_count.load(std::sync::atomic::Ordering::Relaxed);
+        let total_time = self.total_execution_time_ms.load(std::sync::atomic::Ordering::Relaxed);
+        let successes = self.success_count.load(std::sync::atomic::Ordering::Relaxed);
+
+        let avg_time_ms = if executions > 0 {
+            total_time as f64 / executions as f64
+        } else {
+            0.0
+        };
+
+        let success_rate = if executions > 0 {
+            successes as f64 / executions as f64 * 100.0
+        } else {
+            0.0
+        };
+
+        (executions, avg_time_ms, success_rate)
     }
     
     fn setup_keypair_wallet(path: &str) -> Result<WalletType> {
@@ -180,6 +217,9 @@ impl TransactionExecutor {
     }
     
     pub async fn execute_arbitrage(&self, opportunity: &ArbitrageOpportunity) -> Result<Signature> {
+        let start_time = Instant::now();
+        self.execution_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         info!(
             "🔨 Executing arbitrage: {} SOL {} -> {} (expected profit: ${:.2})",
             opportunity.amount_sol,
@@ -187,79 +227,164 @@ impl TransactionExecutor {
             opportunity.sell_dex,
             opportunity.expected_profit_usd
         );
-        
+
         // In dry run mode, just simulate
         if self.dry_run {
             warn!("🏃 DRY RUN - Would execute trade for ${:.2} profit", opportunity.expected_profit_usd);
+            self.success_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             return Ok(Signature::default());
         }
-        
-        // Get Jupiter quote for the arbitrage
-        let quote = self.get_jupiter_quote_for_arbitrage(opportunity).await?;
-        
-        // Build swap transaction using Jupiter
-        let transaction = self.build_jupiter_swap_transaction(quote).await?;
-        
-        // Simulate if required
-        if self.simulation_required {
-            info!("🔬 Simulating transaction...");
-            match self.rpc_client.simulate_transaction(&transaction) {
-                Ok(result) => {
-                    if result.value.err.is_some() {
-                        error!("❌ Simulation failed: {:?}", result.value.err);
-                        return Err(anyhow!("Transaction simulation failed"));
+
+        let result = self.execute_arbitrage_with_retry(opportunity).await;
+
+        // Update performance metrics
+        let execution_time = start_time.elapsed().as_millis() as u64;
+        self.total_execution_time_ms.fetch_add(execution_time, std::sync::atomic::Ordering::Relaxed);
+
+        if result.is_ok() {
+            self.success_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+
+        result
+    }
+
+    async fn execute_arbitrage_with_retry(&self, opportunity: &ArbitrageOpportunity) -> Result<Signature> {
+        let max_retries = 2; // Reduced retries for speed
+        let mut last_error = None;
+
+        for attempt in 1..=max_retries {
+            let attempt_start = Instant::now();
+
+            match self.execute_arbitrage_attempt(opportunity).await {
+                Ok(signature) => {
+                    if attempt > 1 {
+                        info!("✅ Arbitrage succeeded on attempt {}/{} in {:?}",
+                              attempt, max_retries, attempt_start.elapsed());
                     }
-                    info!("✅ Simulation successful! Units: {:?}", result.value.units_consumed);
+                    return Ok(signature);
                 }
                 Err(e) => {
-                    error!("❌ Simulation error: {}", e);
-                    return Err(anyhow!("Failed to simulate: {}", e));
+                    let error_msg = e.to_string();
+                    warn!("❌ Attempt {}/{} failed in {:?}: {}",
+                          attempt, max_retries, attempt_start.elapsed(), error_msg);
+
+                    // Smart retry logic - don't retry certain errors
+                    if error_msg.contains("insufficient funds") ||
+                       error_msg.contains("slippage") ||
+                       error_msg.contains("price impact") {
+                        return Err(e); // Don't retry these errors
+                    }
+
+                    last_error = Some(e);
+
+                    if attempt < max_retries {
+                        // Faster backoff for arbitrage
+                        let delay = Duration::from_millis(50 * attempt as u64);
+                        tokio::time::sleep(delay).await;
+                    }
                 }
             }
         }
-        
-        // Execute transaction
+
+        Err(last_error.unwrap_or_else(|| anyhow!("All retry attempts failed")))
+    }
+
+    async fn execute_arbitrage_attempt(&self, opportunity: &ArbitrageOpportunity) -> Result<Signature> {
+        let start_time = Instant::now();
+
+        // Parallel execution: Get quote and fresh blockhash simultaneously
+        let (quote_result, blockhash_result) = tokio::join!(
+            self.get_jupiter_quote_for_arbitrage(opportunity),
+            self.rpc_client.get_latest_blockhash()
+        );
+
+        let quote = quote_result?;
+        let recent_blockhash = blockhash_result?;
+
+        debug!("⚡ Quote + blockhash fetched in {:?}", start_time.elapsed());
+
+        // Build swap transaction using Jupiter (optimized)
+        let transaction = self.build_jupiter_swap_transaction_fast(quote, recent_blockhash).await?;
+
+        // Fast simulation if required
+        if self.simulation_required {
+            self.simulate_transaction_fast(&transaction).await?;
+        }
+
+        // Execute transaction with optimized settings
         info!("📤 Sending transaction...");
-        let signature = self.rpc_client.send_and_confirm_transaction(&transaction)?;
-        info!("✅ Transaction confirmed: {}", signature);
-        
+        let signature = self.send_transaction_fast(&transaction).await?;
+        info!("✅ Transaction confirmed: {} in {:?}", signature, start_time.elapsed());
+
         Ok(signature)
+    }
+
+    async fn simulate_transaction_fast(&self, transaction: &Transaction) -> Result<()> {
+        debug!("🧪 Fast simulating transaction...");
+
+        // Use fast simulation config
+        let config = solana_client::rpc_config::RpcSimulateTransactionConfig {
+            sig_verify: false, // Skip signature verification for speed
+            replace_recent_blockhash: true,
+            commitment: Some(CommitmentConfig::processed()), // Fastest commitment
+            encoding: Some(UiTransactionEncoding::Base64),
+            accounts: None, // Don't return account data for speed
+            min_context_slot: None,
+            inner_instructions: false, // Skip inner instructions for speed
+        };
+
+        // Simulate with timeout
+        let result = tokio::time::timeout(
+            Duration::from_millis(2000), // Fast timeout
+            self.rpc_client.simulate_transaction_with_config(transaction, config)
+        ).await
+        .context("Simulation timeout")?
+        .context("Simulation RPC error")?;
+
+        if let Some(err) = result.value.err {
+            return Err(anyhow!("Transaction simulation failed: {:?}", err));
+        }
+
+        debug!("✅ Fast simulation passed - Units: {:?}", result.value.units_consumed);
+        Ok(())
     }
     
     async fn get_jupiter_quote_for_arbitrage(&self, opportunity: &ArbitrageOpportunity) -> Result<JupiterQuoteResponse> {
         // Convert SOL amount to lamports
         let amount_lamports = (opportunity.amount_sol * 1_000_000_000.0) as u64;
-        
-        // First swap: SOL -> USDC on the cheaper DEX
-        info!("📊 Getting Jupiter quote for {} SOL -> USDC", opportunity.amount_sol);
-        
+
+        debug!("📊 Getting Jupiter quote for {} SOL -> USDC", opportunity.amount_sol);
+
         let quote_url = format!(
-            "https://quote-api.jup.ag/v6/quote?inputMint={}&outputMint={}&amount={}&slippageBps={}&onlyDirectRoutes=false",
+            "https://quote-api.jup.ag/v6/quote?inputMint={}&outputMint={}&amount={}&slippageBps={}&onlyDirectRoutes=true&maxAccounts=20",
             SOL_MINT, USDC_MINT, amount_lamports, self.slippage_bps
         );
-        
-        let response = self.http_client.get(&quote_url)
+
+        // Optimized HTTP request with aggressive timeouts
+        let response = self.http_client
+            .get(&quote_url)
+            .timeout(Duration::from_millis(2000)) // Very fast timeout for arbitrage
             .send()
             .await
             .context("Failed to get Jupiter quote")?;
-        
+
         if !response.status().is_success() {
             let error_text = response.text().await?;
             return Err(anyhow!("Jupiter quote failed: {}", error_text));
         }
-        
+
         let quote: JupiterQuoteResponse = response.json()
             .await
             .context("Failed to parse Jupiter quote")?;
-        
-        info!("📈 Jupiter route: {} -> {}", 
+
+        debug!("📈 Jupiter route: {} -> {}",
             quote.route_plan.iter()
                 .map(|s| s.swap_info.label.clone())
                 .collect::<Vec<_>>()
                 .join(" -> "),
             quote.out_amount.parse::<u64>().unwrap_or(0) as f64 / 1_000_000.0
         );
-        
+
         Ok(quote)
     }
     
@@ -285,9 +410,10 @@ impl TransactionExecutor {
             }),
         };
         
-        // Get swap transaction from Jupiter
+        // Get swap transaction from Jupiter with timeout
         let response = self.http_client.post("https://quote-api.jup.ag/v6/swap")
             .json(&swap_request)
+            .timeout(Duration::from_secs(8)) // Fast timeout for arbitrage
             .send()
             .await
             .context("Failed to get swap transaction")?;
@@ -302,16 +428,18 @@ impl TransactionExecutor {
             .context("Failed to parse swap response")?;
         
         // Deserialize the transaction
-        let tx_bytes = base64::decode(&swap_response.swap_transaction)
+        use base64::{engine::general_purpose, Engine as _};
+        let tx_bytes = general_purpose::STANDARD
+            .decode(&swap_response.swap_transaction)
             .context("Failed to decode transaction")?;
-        
+
         let mut transaction: Transaction = bincode::deserialize(&tx_bytes)
             .context("Failed to deserialize transaction")?;
         
         // Sign the transaction
         match &self.wallet {
             WalletType::Keypair(kp) => {
-                let recent_blockhash = self.rpc_client.get_latest_blockhash()?;
+                let recent_blockhash = self.rpc_client.get_latest_blockhash().await?;
                 transaction.partial_sign(&[kp], recent_blockhash);
             }
             WalletType::Ledger(_) => {
@@ -320,6 +448,109 @@ impl TransactionExecutor {
         }
         
         Ok(transaction)
+    }
+
+    /// Optimized transaction building with pre-fetched blockhash
+    async fn build_jupiter_swap_transaction_fast(
+        &self,
+        quote: JupiterQuoteResponse,
+        recent_blockhash: solana_sdk::hash::Hash
+    ) -> Result<Transaction> {
+        let payer = match &self.wallet {
+            WalletType::Keypair(kp) => kp.pubkey(),
+            WalletType::Ledger(_) => return Err(anyhow!("Ledger not yet implemented")),
+        };
+
+        // Build swap request with optimized settings
+        let swap_request = JupiterSwapRequest {
+            user_public_key: payer.to_string(),
+            quote_response: quote,
+            wrap_and_unwrap_sol: true,
+            use_shared_accounts: true,
+            fee_account: None,
+            tracking_account: None,
+            compute_unit_price_micro_lamports: Some(self.priority_fee * 1000),
+            priority_level: Some("veryHigh".to_string()), // Highest priority
+            dynamic_slippage: Some(DynamicSlippage {
+                min_bps: 5,  // Tighter slippage for speed
+                max_bps: self.slippage_bps,
+            }),
+        };
+
+        debug!("🔨 Building Jupiter swap transaction");
+
+        // Fast HTTP request to Jupiter swap API
+        let response = self.http_client
+            .post("https://quote-api.jup.ag/v6/swap")
+            .json(&swap_request)
+            .timeout(Duration::from_millis(3000)) // Fast timeout
+            .send()
+            .await
+            .context("Failed to get Jupiter swap transaction")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await?;
+            return Err(anyhow!("Jupiter swap API error: {}", error_text));
+        }
+
+        let swap_response: JupiterSwapResponse = response.json().await?;
+        let tx_bytes = base64::engine::general_purpose::STANDARD
+            .decode(&swap_response.swap_transaction)
+            .context("Failed to decode swap transaction")?;
+
+        let mut transaction: Transaction = bincode::deserialize(&tx_bytes)
+            .context("Failed to deserialize transaction")?;
+
+        // Sign with pre-fetched blockhash
+        match &self.wallet {
+            WalletType::Keypair(kp) => {
+                transaction.partial_sign(&[kp], recent_blockhash);
+            }
+            WalletType::Ledger(_) => {
+                return Err(anyhow!("Ledger signing not yet implemented"));
+            }
+        }
+
+        Ok(transaction)
+    }
+
+    /// Fast transaction sending with optimized confirmation strategy
+    async fn send_transaction_fast(&self, transaction: &Transaction) -> Result<Signature> {
+        // Send transaction with skipPreflight for speed
+        let config = solana_client::rpc_config::RpcSendTransactionConfig {
+            skip_preflight: true, // Skip simulation for speed
+            preflight_commitment: Some(solana_sdk::commitment_config::CommitmentLevel::Processed),
+            encoding: Some(UiTransactionEncoding::Base64),
+            max_retries: Some(3),
+            min_context_slot: None,
+        };
+
+        // Send transaction
+        let signature = self.rpc_client
+            .send_transaction_with_config(transaction, config)
+            .await?;
+
+        // Fast confirmation check (don't wait for finalized)
+        let start_time = Instant::now();
+        let timeout = Duration::from_secs(30);
+
+        while start_time.elapsed() < timeout {
+            match self.rpc_client.confirm_transaction(&signature).await {
+                Ok(confirmed) => {
+                    if confirmed {
+                        return Ok(signature);
+                    }
+                }
+                Err(e) => {
+                    debug!("Confirmation check failed: {}", e);
+                }
+            }
+
+            // Short sleep before retry
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+
+        Err(anyhow!("Transaction confirmation timeout"))
     }
     
     // Fallback method: Build custom swap instructions (without Jupiter)
@@ -358,7 +589,7 @@ impl TransactionExecutor {
         }
         
         // Get recent blockhash
-        let recent_blockhash = self.rpc_client.get_latest_blockhash()?;
+        let recent_blockhash = self.rpc_client.get_latest_blockhash().await?;
         
         // Create message
         let message = Message::new_with_blockhash(
@@ -378,7 +609,7 @@ impl TransactionExecutor {
         };
         
         // Send transaction
-        let signature = self.rpc_client.send_and_confirm_transaction(&transaction)?;
+        let signature = self.rpc_client.send_and_confirm_transaction(&transaction).await?;
         Ok(signature)
     }
 
@@ -399,7 +630,7 @@ impl TransactionExecutor {
             }
             attempts += 1;
 
-            match self.rpc_client.get_transaction(signature, UiTransactionEncoding::JsonParsed) {
+            match self.rpc_client.get_transaction(signature, UiTransactionEncoding::JsonParsed).await {
                 Ok(tx) => {
                     return self.parse_transaction_profit(tx, &wallet_pubkey, signature);
                 },

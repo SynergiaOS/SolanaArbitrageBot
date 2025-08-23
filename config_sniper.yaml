@@ -6,7 +6,10 @@ rpc:
   backup_url: "https://mainnet.helius-rpc.com"
 
 wallet:
-  path: "./wallet.json"
+  path: "./wallet.json"                            # BACKUP - NIE UŻYWAĆ!
+  use_ledger: true                                 # SNIPER: UŻYWAJ LEDGER!
+  ledger_path: "44'/501'/0'/0'"                   # Derivation path
+  ledger_address: "9PdJZJh33TsMB6s3DuhSXYCSpUiM3oBqyuno2aLvYTk"  # AKTYWNY adres Ledger (0.18992 SOL)
 
 # Sniper-specific settings
 sniper:
@@ -75,7 +78,7 @@ monitoring:
   
 # Discord alerts for sniper
 discord:
-  webhook_url: "https://discordapp.com/api/webhooks/1407094459493122158/9Ju35aOQQk5MrqRe4Qj4hx6Y3lPmuq7zfswplBqtB34WBJ-2fXnRSq8C1kaP0VCY8nqG"
+  # webhook_url: "${DISCORD_WEBHOOK_URL}"   # prefer ENV; config acts as fallback if set
   enabled: true
   alert_on_snipe: true             # Alert when sniping new token
   alert_on_profit: true            # Alert on profit target hit

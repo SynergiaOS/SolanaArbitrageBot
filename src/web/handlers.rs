@@ -9,13 +9,13 @@ use chrono::Utc;
 use log::{info, warn};
 use rust_decimal::Decimal;
 use serde::Deserialize;
-use std::collections::HashMap;
 
 use super::{
     server::AppState,
     ApiResponse,
     BotStatus,
     BotConfig,
+    WebSocketMessage,
     TransactionRecord,
     database::DailyStats,
 };
@@ -71,31 +71,66 @@ pub async fn get_bot_status(
 
 /// Get current bot configuration
 pub async fn get_bot_config(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<BotConfig>>, StatusCode> {
-    // TODO: Load from actual config
-    let config = BotConfig {
-        min_profit_usd: Decimal::from(5),
-        max_position_sol: Decimal::from(1),
-        max_daily_trades: 50,
-        max_daily_loss_usd: Decimal::from(100),
-        enabled: true,
-    };
-
+    let config = state.runtime_config.read().await.clone();
     Ok(Json(ApiResponse::success(config)))
 }
 
 /// Update bot configuration
 pub async fn update_bot_config(
-    State(_state): State<AppState>,
-    Json(config): Json<BotConfig>,
-) -> Result<Json<ApiResponse<String>>, StatusCode> {
-    info!("📝 Updating bot configuration: {:?}", config);
-    
-    // TODO: Implement actual config update
-    // This would need to update the bot's runtime configuration
-    
-    Ok(Json(ApiResponse::success("Configuration updated successfully".to_string())))
+    State(state): State<AppState>,
+    Json(new_config): Json<BotConfig>,
+) -> Result<(StatusCode, Json<ApiResponse<String>>), StatusCode> {
+    // Log change with timestamp and source
+    let now = Utc::now();
+    let old_config = {
+        state.runtime_config.read().await.clone()
+    };
+
+    // Validate input
+    let mut errors: Vec<String> = Vec::new();
+    if new_config.min_profit_usd <= Decimal::ZERO {
+        errors.push("min_profit_usd must be > 0".to_string());
+    }
+    if new_config.max_position_sol < Decimal::from_f64_retain(0.001).unwrap() || new_config.max_position_sol > Decimal::from_f64_retain(10.0).unwrap() {
+        errors.push("max_position_sol must be between 0.001 and 10.0 SOL".to_string());
+    }
+    if new_config.max_daily_trades == 0 || new_config.max_daily_trades > 1000 {
+        errors.push("max_daily_trades must be between 1 and 1000".to_string());
+    }
+    if new_config.max_daily_loss_usd <= Decimal::ZERO {
+        errors.push("max_daily_loss_usd must be > 0".to_string());
+    }
+
+    if !errors.is_empty() {
+        warn!("[{}][CONFIG][API] Validation failed: {:?}", now.to_rfc3339(), errors);
+        // Return 400 with JSON error body
+        let body = ApiResponse::<String>::error(errors.join("; "));
+        return Ok((StatusCode::BAD_REQUEST, Json(body)));
+    }
+
+    info!(
+        "[{}][CONFIG][API] Update accepted: old={:?} -> new={:?}",
+        now.to_rfc3339(), old_config, new_config
+    );
+
+    // Update runtime config in memory
+    {
+        let mut cfg = state.runtime_config.write().await;
+        *cfg = new_config.clone();
+    }
+
+    // Emit WebSocket config update notification
+    let msg = WebSocketMessage::ConfigUpdate {
+        timestamp: now,
+        source: "API".to_string(),
+        old: old_config,
+        new: new_config,
+    };
+    super::server::broadcast_websocket_message(&state.websocket_tx, msg).await;
+
+    Ok((StatusCode::OK, Json(ApiResponse::success("Configuration updated successfully".to_string()))))
 }
 
 /// Get transaction history
@@ -170,16 +205,26 @@ pub async fn pause_bot(
 /// Emergency stop the bot
 pub async fn emergency_stop(
     State(state): State<AppState>,
+    axum::Json(body): axum::Json<Option<serde_json::Value>>,
 ) -> Result<Json<ApiResponse<String>>, StatusCode> {
-    warn!("🚨 EMERGENCY STOP triggered via API");
-    
+    let now = chrono::Utc::now();
+    let (reason, source) = match body {
+        Some(v) => (
+            v.get("reason").and_then(|x| x.as_str()).unwrap_or("unspecified").to_string(),
+            v.get("source").and_then(|x| x.as_str()).unwrap_or("api").to_string(),
+        ),
+        None => ("unspecified".to_string(), "api".to_string()),
+    };
+
+    warn!("[{}][EMERGENCY][{}] reason={}", now.to_rfc3339(), source, reason);
+
     let mut bot_running = state.bot_running.write().await;
     *bot_running = false;
-    
+
     // TODO: Implement additional emergency stop logic
     // - Cancel pending transactions
     // - Close positions
     // - Send Discord alert
-    
+
     Ok(Json(ApiResponse::success("Emergency stop executed".to_string())))
 }

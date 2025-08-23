@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { getApiBase } from "@/lib/api";
 
 export default function Home() {
   const [status, setStatus] = useState<string>("Connecting...");
@@ -39,43 +40,92 @@ export default function Home() {
   }, []);
 
   async function control(action: string) {
-    await fetch(`/api/control/${action}`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+    const url = `${getApiBase()}/api/control/${action}`;
+    await fetch(url, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
   }
 
   return (
-    <main className="min-h-screen bg-gray-950 text-gray-200">
-      <div className="max-w-6xl mx-auto p-6">
-        <header className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-semibold">Solana Arbitrage Bot Dashboard</h1>
-          <div className={"px-3 py-1 rounded text-sm " + (connected ? 'bg-emerald-900 text-emerald-200' : 'bg-rose-900 text-rose-200')}>
+    <div className="p-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold mb-2">Dashboard Overview</h1>
+        <p className="text-gray-400">Monitor your Solana arbitrage bot performance</p>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        <div className="card p-6">
+          <h3 className="text-lg font-medium mb-4">Live Price Feed</h3>
+          <div className="text-sm text-gray-400 mb-4">
+            Last Update: {labels.at(-1) || 'No data'} | Data Points: {labels.length}
+          </div>
+          <PriceChart labels={labels} raydium={raydium} orca={orca} />
+        </div>
+
+        <div className="card p-6">
+          <h3 className="text-lg font-medium mb-4">Quick Controls</h3>
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <button
+              className="px-4 py-3 rounded-lg bg-[var(--primary)] text-black hover:shadow-[0_0_24px_#10b98155] transition font-medium"
+              onClick={() => control('start')}
+            >
+              Start Bot
+            </button>
+            <button
+              className="px-4 py-3 rounded-lg bg-yellow-600/20 text-yellow-400 border border-yellow-600/50 hover:bg-yellow-600/30 transition"
+              onClick={() => control('pause')}
+            >
+              Pause
+            </button>
+            <button
+              className="px-4 py-3 rounded-lg bg-gray-600/20 text-gray-400 border border-gray-600/50 hover:bg-gray-600/30 transition"
+              onClick={() => control('stop')}
+            >
+              Stop
+            </button>
+            <button
+              className="px-4 py-3 rounded-lg bg-rose-600/20 text-rose-400 border border-rose-600/50 hover:bg-rose-600/30 transition"
+              onClick={() => control('emergency')}
+            >
+              Emergency
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">API Token</label>
+              <input
+                className="w-full bg-[var(--background)] border border-[var(--border)] rounded px-3 py-2"
+                value={token}
+                onChange={e => setToken(e.target.value)}
+                type="password"
+              />
+              <p className="text-xs text-gray-500 mt-1">Used for API authentication</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Status Cards */}
+      <div className="grid lg:grid-cols-4 gap-4 mt-6">
+        <div className="card p-4">
+          <div className="text-sm text-gray-400 mb-1">Connection Status</div>
+          <div className={`text-lg font-semibold ${connected ? 'text-emerald-400' : 'text-rose-400'}`}>
             {status}
           </div>
-        </header>
-
-        <section className="grid md:grid-cols-2 gap-4">
-          <div className="bg-gray-900 border border-gray-800 rounded p-4">
-            <h3 className="font-medium mb-2">Prices (Raydium vs Orca)</h3>
-            <div className="text-xs text-gray-400 mb-2">Last: {labels.at(-1) || '-'} | Points: {labels.length}</div>
-            <PriceChart labels={labels} raydium={raydium} orca={orca} />
-          </div>
-
-          <div className="bg-gray-900 border border-gray-800 rounded p-4">
-            <h3 className="font-medium mb-2">Controls</h3>
-            <div className="flex gap-2 flex-wrap mb-3">
-              <button className="px-3 py-2 rounded border border-gray-700 hover:bg-gray-800" onClick={() => control('start')}>Start</button>
-              <button className="px-3 py-2 rounded border border-gray-700 hover:bg-gray-800" onClick={() => control('pause')}>Pause</button>
-              <button className="px-3 py-2 rounded border border-gray-700 hover:bg-gray-800" onClick={() => control('stop')}>Stop</button>
-              <button className="px-3 py-2 rounded border border-rose-500 text-rose-400 hover:bg-gray-800" onClick={() => control('emergency')}>Emergency Stop</button>
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm text-gray-400">API Token</label>
-              <input className="w-full bg-gray-950 border border-gray-800 rounded p-2" value={token} onChange={e=>setToken(e.target.value)} />
-              <p className="text-xs text-gray-500">Authorization: Bearer {'<token>'}</p>
-            </div>
-          </div>
-        </section>
+        </div>
+        <div className="card p-4">
+          <div className="text-sm text-gray-400 mb-1">Bot Status</div>
+          <div className="text-lg font-semibold text-gray-300">Inactive</div>
+        </div>
+        <div className="card p-4">
+          <div className="text-sm text-gray-400 mb-1">Today&rsquo;s Trades</div>
+          <div className="text-lg font-semibold text-gray-300">0</div>
+        </div>
+        <div className="card p-4">
+          <div className="text-sm text-gray-400 mb-1">Today&rsquo;s P&L</div>
+          <div className="text-lg font-semibold text-emerald-400">+$0.00</div>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
 

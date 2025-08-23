@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use log::{info, error};
+use log::info;
 use rust_decimal::Decimal;
 use sqlx::{SqlitePool, Row};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions, SqliteJournalMode};

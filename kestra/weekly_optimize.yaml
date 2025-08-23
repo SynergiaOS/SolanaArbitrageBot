@@ -1,0 +1,52 @@
+id: weekly_optimize
+namespace: arbitrage
+description: Weekly GEPA optimization and live config update
+tasks:
+  - id: export_last7days_csv
+    type: io.kestra.plugin.scripts.shell
+    commands:
+      - >
+        sqlite3 -csv "${{ envs.DB_PATH }}" \
+        "SELECT timestamp,profit_usd,amount_sol,spread_percent,raydium_price,orca_price FROM transactions\n         WHERE timestamp >= datetime('now','-7 days');" > trades_last7.csv
+
+  - id: run_gepa_dry
+    type: io.kestra.plugin.scripts.shell
+    commands:
+      - >
+        ${{ envs.CARGO_BIN }} run --release --bin gepa_optimizer -- \
+        --input trades_last7.csv \
+        --output optimized.yaml \
+        --format csv \
+        --dry-run
+
+  - id: review_and_apply
+    type: io.kestra.plugin.scripts.shell
+    commands:
+      - cat optimized.yaml
+      - >
+        jq -n --argfile y <(yq -o=json optimized.yaml) \
+        '.limits as $l | {
+          min_profit_usd: ($l.min_profit_percent/100.0) * 1.0,  
+          max_position_sol: $l.max_position_sol,
+          max_daily_trades:  (.execution.max_daily_trades // 50),
+          max_daily_loss_usd: $l.max_daily_loss_usd,
+          enabled: true
+        }' > payload.json
+      - >
+        curl -s -X POST "http://${{ envs.BOT_HOST }}:${{ envs.BOT_PORT }}/api/config" \
+        -H "Authorization: Bearer ${{ envs.AUTH_TOKEN }}" \
+        -H "Content-Type: application/json" \
+        -d @payload.json
+
+triggers:
+  - id: weekly_sun_2am
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 2 * * SUN"
+
+envs:
+  BOT_HOST: "127.0.0.1"
+  BOT_PORT: "3001"
+  AUTH_TOKEN: "your-secret-token-here"
+  DB_PATH: "./data/dashboard.db"
+  CARGO_BIN: "cargo"
+

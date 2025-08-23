@@ -1,10 +1,13 @@
 # Solana Arbitrage Bot - Minimalna Wykonalna Implementacja
 
 ## 🎯 Cel
+
 Jeden bot. Jedna strategia. Zero bullshitu.
+
 **Arbitraż między Raydium ↔ Orca na parach SOL/USDC**
 
 ## 📊 Metryki Sukcesu
+
 - **Zysk**: >50 USD/dzień
 - **Latencja**: <300ms (detekcja + egzekucja)
 - **Uptime**: >95%
@@ -12,7 +15,7 @@ Jeden bot. Jedna strategia. Zero bullshitu.
 
 ## 🏗️ Architektura (KISS)
 
-```
+```text
 [Raydium WebSocket] ─┐
                      ├─→ [ArbitrageBot] ─→ [Executor] ─→ [Profit 💰]
 [Orca WebSocket] ────┘        ↑
@@ -30,7 +33,7 @@ Jeden bot. Jedna strategia. Zero bullshitu.
 
 ## 📁 Struktura Projektu
 
-```
+```text
 solana-arbitrage-bot/
 ├── Cargo.toml           # Jedna definicja dependencji
 ├── config.yaml          # Konfiguracja (RPC, wallet, progi)
@@ -46,6 +49,7 @@ solana-arbitrage-bot/
 ## ⚡ Kluczowe Komponenty
 
 ### 1. Monitor (monitor.rs)
+
 ```rust
 pub struct DexMonitor {
     raydium_price: Arc<Mutex<f64>>,
@@ -61,6 +65,7 @@ impl DexMonitor {
 ```
 
 ### 2. Calculator (calculator.rs)
+
 ```rust
 pub struct ProfitCalculator {
     gas_cost: f64,      // ~0.00025 SOL
@@ -72,9 +77,9 @@ impl ProfitCalculator {
     pub fn calculate(&self, price_a: f64, price_b: f64, amount: f64) -> Option<Opportunity> {
         let spread = (price_b - price_a).abs() / price_a;
         let profit = spread - self.gas_cost - self.slippage;
-        
+
         if profit > self.min_profit {
-            Some(Opportunity { 
+            Some(Opportunity {
                 buy_dex: if price_a < price_b { "Raydium" } else { "Orca" },
                 sell_dex: if price_a < price_b { "Orca" } else { "Raydium" },
                 profit_usd: profit * amount,
@@ -87,6 +92,7 @@ impl ProfitCalculator {
 ```
 
 ### 3. Executor (executor.rs)
+
 ```rust
 pub struct TransactionExecutor {
     rpc_client: RpcClient,
@@ -104,6 +110,7 @@ impl TransactionExecutor {
 ```
 
 ### 4. Safety (safety.rs)
+
 ```rust
 pub struct SafetyLimits {
     max_position_size: f64,     // Max 100 SOL per trade
@@ -207,14 +214,23 @@ GROUP BY DATE(timestamp);
 # Kompilacja
 cargo build --release
 
-# Dry run (bez prawdziwych transakcji)
-./target/release/arbitrage-bot --dry-run
+# Testy (lokalne)
+cargo test
+# Testy sieciowe (opcjonalne, zewnętrzne API) – uruchom ręcznie:
+cargo test --test integration -- --ignored --nocapture
 
-# Testnet
-./target/release/arbitrage-bot --network testnet
+# Docker (produkcja, non-root user 'arbitrage')
+docker build -t solana-arb-bot:prod .
+docker run --rm -p 3001:3001 -v $(pwd)/data:/app/data -v $(pwd)/logs:/app/logs solana-arb-bot:prod
 
-# Mainnet (ostrożnie!)
-./target/release/arbitrage-bot --network mainnet --max-position 10
+# REST API przykłady
+curl -s http://127.0.0.1:3001/api/status | jq
+curl -s -X POST -H 'Content-Type: application/json' \
+  -d '{"min_profit_usd":0.5,"max_position_sol":0.02,"max_daily_trades":50,"max_daily_loss_usd":10,"enabled":true}' \
+  http://127.0.0.1:3001/api/config | jq
+curl -s -X POST -H 'Content-Type: application/json' \
+  -d '{"reason":"manual stop","source":"ops"}' \
+  http://127.0.0.1:3001/api/control/emergency | jq
 ```
 
 ## 📊 Oczekiwane Wyniki

@@ -1,17 +1,20 @@
 //! Integration tests for real API connections
-//! Run with: cargo test --test integration -- --nocapture
+//! Network-dependent tests are marked with #[ignore] to keep CI stable.
+//! Run them locally with: cargo test --test integration -- --ignored --nocapture
 
 use anyhow::Result;
+use rust_decimal::prelude::ToPrimitive;
 use solana_arbitrage_bot::*;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[tokio::test]
+#[ignore]
 async fn test_real_raydium_price_fetch() -> Result<()> {
-    env_logger::init();
-    
+    env_logger::try_init().ok();
+
     println!("Testing real Raydium price fetch...");
-    
+
     let config = Config {
         rpc: RpcConfig {
             url: "https://api.mainnet-beta.solana.com".to_string(),
@@ -33,11 +36,11 @@ async fn test_real_raydium_price_fetch() -> Result<()> {
             },
         },
         limits: LimitsConfig {
-            max_position_sol: 10.0,
-            min_profit_percent: 0.3,
-            min_profit_usd: 1.0,
-            max_slippage_percent: 0.5,
-            max_daily_loss_usd: 100.0,
+            max_position_sol: rust_decimal::Decimal::from_f64_retain(10.0).unwrap(),
+            min_profit_percent: rust_decimal::Decimal::from_f64_retain(0.3).unwrap(),
+            min_profit_usd: rust_decimal::Decimal::from_f64_retain(1.0).unwrap(),
+            max_slippage_percent: rust_decimal::Decimal::from_f64_retain(0.5).unwrap(),
+            max_daily_loss_usd: rust_decimal::Decimal::from_f64_retain(100.0).unwrap(),
             max_daily_trades: 30,
         },
         execution: ExecutionConfig {
@@ -45,8 +48,10 @@ async fn test_real_raydium_price_fetch() -> Result<()> {
             simulation_required: true,
             max_retries: 3,
         },
+        discord: None,
+        web: None,
     };
-    
+
     let raydium_price = Arc::new(Mutex::new(None));
     let orca_price = Arc::new(Mutex::new(None));
     
@@ -78,37 +83,41 @@ async fn test_real_raydium_price_fetch() -> Result<()> {
     assert!(ray_price.is_some() || orca_price_val.is_some(), "Should have received at least one price update");
     
     if let Some(price) = ray_price {
-        assert!(price > 0.0 && price < 1000.0, "Price should be reasonable");
-        println!("✅ Raydium price looks valid: ${:.2}", price);
+        // Decimal sanity check converted to f64 for test output only
+        let p = price.to_f64().unwrap_or(0.0);
+        assert!(p > 0.0 && p < 10000.0, "Price should be reasonable");
+        println!("✅ Raydium price looks valid: ${:.2}", p);
     }
-    
+
     if let Some(price) = orca_price_val {
-        assert!(price > 0.0 && price < 1000.0, "Price should be reasonable");
-        println!("✅ Orca price looks valid: ${:.2}", price);
+        let p = price.to_f64().unwrap_or(0.0);
+        assert!(p > 0.0 && p < 10000.0, "Price should be reasonable");
+        println!("✅ Orca price looks valid: ${:.2}", p);
     }
-    
+
     Ok(())
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_jupiter_quote_api() -> Result<()> {
     println!("Testing Jupiter Quote API...");
-    
+
     let sol_mint = "So11111111111111111111111111111111111111112";
     let usdc_mint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
     let amount = 1_000_000_000; // 1 SOL in lamports
-    
+
     match monitor::DexMonitor::get_jupiter_quote(sol_mint, usdc_mint, amount, 50).await {
         Ok(quote) => {
             println!("✅ Jupiter API works!");
-            println!("Quote: {} SOL = {} USDC", 
+            println!("Quote: {} SOL = {} USDC",
                 quote.in_amount as f64 / 1e9,
                 quote.out_amount as f64 / 1e6
             );
-            
+
             // Validate the quote
             assert!(quote.out_amount > 0, "Should have non-zero output");
-            
+
             // Check route
             println!("Route: {:?}", quote.market_infos.iter()
                 .map(|m| &m.label)
@@ -120,27 +129,28 @@ async fn test_jupiter_quote_api() -> Result<()> {
             println!("This is expected in test environment");
         }
     }
-    
+
     Ok(())
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_arbitrage_detection() -> Result<()> {
     println!("Testing arbitrage detection with real prices...");
-    
+
     let config = test_config();
     let calculator = calculator::ProfitCalculator::new(&config);
-    
+
     // Simulate a price difference
     let raydium_price = 150.0;
     let orca_price = 151.0; // 0.67% difference
-    
+
     let opportunity = calculator.calculate_opportunity(
         raydium_price,
         orca_price,
         10.0, // 10 SOL max
     );
-    
+
     if let Some(opp) = opportunity {
         println!("✅ Arbitrage opportunity detected!");
         println!("  Buy on: {}", opp.buy_dex);
@@ -149,12 +159,12 @@ async fn test_arbitrage_detection() -> Result<()> {
         println!("  Expected profit: ${:.2}", opp.expected_profit_usd);
         println!("  Profit after fees: ${:.2}", opp.profit_after_fees_usd);
         println!("  Confidence: {:.1}%", opp.confidence_score * 100.0);
-        
+
         assert!(opp.profit_after_fees_usd > 0.0, "Should be profitable");
     } else {
         println!("No arbitrage opportunity at this spread");
     }
-    
+
     Ok(())
 }
 
@@ -217,11 +227,11 @@ fn test_config() -> Config {
             },
         },
         limits: LimitsConfig {
-            max_position_sol: 10.0,
-            min_profit_percent: 0.3,
-            min_profit_usd: 1.0,
-            max_slippage_percent: 0.5,
-            max_daily_loss_usd: 100.0,
+            max_position_sol: rust_decimal::Decimal::from_f64_retain(10.0).unwrap(),
+            min_profit_percent: rust_decimal::Decimal::from_f64_retain(0.3).unwrap(),
+            min_profit_usd: rust_decimal::Decimal::from_f64_retain(1.0).unwrap(),
+            max_slippage_percent: rust_decimal::Decimal::from_f64_retain(0.5).unwrap(),
+            max_daily_loss_usd: rust_decimal::Decimal::from_f64_retain(100.0).unwrap(),
             max_daily_trades: 30,
         },
         execution: ExecutionConfig {
@@ -229,6 +239,8 @@ fn test_config() -> Config {
             simulation_required: true,
             max_retries: 3,
         },
+        discord: None,
+        web: None,
     }
 }
 

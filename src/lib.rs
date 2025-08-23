@@ -10,6 +10,7 @@ pub mod discord;
 pub mod sniper;
 pub mod utils;
 pub mod web;
+pub mod verification;
 
 // Re-export main types
 pub use crate::monitor::{DexMonitor, PriceUpdate};

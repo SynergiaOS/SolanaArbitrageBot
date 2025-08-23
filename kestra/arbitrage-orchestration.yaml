@@ -1,0 +1,265 @@
+id: solana-arbitrage-orchestration
+namespace: aura.trading
+description: Meta-orchestration for Solana Arbitrage Bot Fleet with GEPA optimization
+
+inputs:
+  - name: network
+    type: STRING
+    defaults: mainnet
+  - name: max_position_sol
+    type: FLOAT
+    defaults: 10.0
+  - name: min_profit_percent
+    type: FLOAT
+    defaults: 0.3
+
+variables:
+  bot_path: /home/marcin/windsurf/Projects/SolanaArbitrageBot
+  db_path: ./data/dashboard.db
+
+tasks:
+  # === MORNING STARTUP SEQUENCE ===
+  - id: morning-startup
+    type: io.kestra.core.tasks.flows.Sequential
+    tasks:
+      - id: health-check
+        type: io.kestra.plugin.scripts.shell.Commands
+        commands:
+          - cd {{ vars.bot_path }}
+          - ./test_ledger.sh
+          - cargo test --release --quiet
+
+      - id: fetch-market-data
+        type: io.kestra.plugin.scripts.python.Script
+        script: |
+          import requests
+          import json
+          import time
+
+          # Fetch Jupiter quote for SOL/USDC
+          response = requests.get(
+            "https://quote-api.jup.ag/v6/quote",
+            params={
+              "inputMint": "So11111111111111111111111111111111111111112",
+              "outputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+              "amount": 1000000000
+            },
+            timeout=10
+          )
+
+          if response.status_code == 200:
+            quote = response.json()
+            sol_price = quote['out_amount'] / 1e6
+            print(f"Current SOL price: ${sol_price:.2f}")
+
+            # Save to context for decision making
+            with open('/tmp/market_context.json', 'w') as f:
+              json.dump({
+                'sol_price': sol_price,
+                'timestamp': time.time()
+              }, f)
+          else:
+            print(f"Error fetching market data: {response.status_code}")
+            exit(1)
+
+      - id: start-bot-fleet
+        type: io.kestra.core.tasks.flows.Parallel
+        tasks:
+          - id: start-arbitrage-bot
+            type: io.kestra.plugin.scripts.shell.Commands
+            commands:
+              - cd {{ vars.bot_path }}
+              - |
+                nohup ./target/release/solana-arbitrage-bot \
+                  --network {{ inputs.network }} \
+                  --max-position {{ inputs.max_position_sol }} \
+                  > /var/log/arbitrage-bot.log 2>&1 &
+                echo $! > /tmp/arbitrage-bot.pid
+                sleep 2
+                if ! kill -0 $(cat /tmp/arbitrage-bot.pid) 2>/dev/null; then
+                  echo "Bot failed to start"
+                  exit 1
+                fi
+
+          - id: start-guardian-bot
+            type: io.kestra.plugin.scripts.shell.Commands
+            commands:
+              - cd {{ vars.bot_path }}
+              - |
+                nohup ./target/release/solana-arbitrage-bot \
+                  --network {{ inputs.network }} \
+                  --max-position 1.0 \
+                  --config config_sniper.yaml \
+                  > /var/log/guardian-bot.log 2>&1 &
+                echo $! > /tmp/guardian-bot.pid
+
+  # === CONTINUOUS MONITORING ===
+  - id: monitor-performance
+    type: io.kestra.core.tasks.flows.Schedule
+    cron: "*/5 * * * *"  # Every 5 minutes
+    tasks:
+      - id: check-bot-health
+        type: io.kestra.plugin.scripts.python.Script
+        script: |
+          import psutil
+          import json
+          import os
+
+          # Check if bot process is running
+          try:
+            with open('/tmp/arbitrage-bot.pid', 'r') as f:
+              pid = int(f.read().strip())
+
+            if psutil.pid_exists(pid):
+              process = psutil.Process(pid)
+              stats = {
+                'status': 'running',
+                'pid': pid,
+                'cpu_percent': process.cpu_percent(),
+                'memory_mb': process.memory_info().rss / 1024 / 1024,
+                'threads': process.num_threads()
+              }
+              print(f"Bot running: CPU {stats['cpu_percent']}%, MEM {stats['memory_mb']:.1f}MB")
+            else:
+              stats = {'status': 'dead', 'pid': None}
+              print("Bot process not found")
+              exit(1)
+          except Exception as e:
+            print(f"Error checking bot health: {e}")
+            exit(1)
+
+          # Save stats for other tasks
+          with open('/tmp/bot_health.json', 'w') as f:
+            json.dump(stats, f)
+
+      - id: analyze-trades
+        type: io.kestra.plugin.scripts.shell.Commands
+        commands:
+          - |
+            cd {{ vars.bot_path }}
+            sqlite3 {{ vars.db_path }} \
+              "SELECT COUNT(*) as trades,
+                      SUM(profit_usd) as total_profit,
+                      AVG(profit_usd) as avg_profit,
+                      MAX(profit_usd) as best_trade,
+                      MIN(profit_usd) as worst_trade
+               FROM transactions
+               WHERE timestamp > datetime('now', '-1 hour');" \
+              > /tmp/trade_stats.txt
+            cat /tmp/trade_stats.txt
+
+  # === WEEKLY ML MODEL RETRAINING ===
+  - id: weekly-model-update
+    type: io.kestra.core.tasks.flows.Schedule
+    cron: "0 3 * * 0"  # Sunday 3 AM
+    tasks:
+      - id: collect-training-data
+        type: io.kestra.plugin.scripts.python.Script
+        script: |
+          import pandas as pd
+          import sqlite3
+          import os
+
+          bot_path = "{{ vars.bot_path }}"
+          db_path = os.path.join(bot_path, "data", "dashboard.db")
+
+          # Collect last week's trades
+          conn = sqlite3.connect(db_path)
+          df = pd.read_sql_query("""
+            SELECT * FROM transactions
+            WHERE timestamp > datetime('now', '-7 days')
+          """, conn)
+          conn.close()
+
+          if len(df) > 0:
+            # Save for training
+            df.to_parquet('/tmp/training_data.parquet')
+            print(f"Collected {len(df)} trades for training")
+          else:
+            print("No trades found for training")
+            exit(0)
+
+      - id: train-gepa-model
+        type: io.kestra.plugin.scripts.shell.Commands
+        commands:
+          - cd {{ vars.bot_path }}
+          - |
+            if [ -f /tmp/training_data.parquet ]; then
+              ./target/release/gepa_optimizer --train /tmp/training_data.parquet --output config_optimized.yaml
+            else
+              echo "No training data available"
+              exit 0
+            fi
+
+      - id: backtest-new-params
+        type: io.kestra.plugin.scripts.shell.Commands
+        commands:
+          - cd {{ vars.bot_path }}
+          - |
+            if [ -f config_optimized.yaml ]; then
+              ./target/release/gepa_optimizer --backtest config_optimized.yaml --data /tmp/training_data.parquet
+            fi
+
+      - id: deploy-optimized-config
+        type: io.kestra.plugin.scripts.shell.Commands
+        commands:
+          - cd {{ vars.bot_path }}
+          - |
+            if [ -f config_optimized.yaml ]; then
+              cp config_optimized.yaml config.yaml
+              echo "Deployed optimized configuration"
+              # Restart bot with new config
+              if [ -f /tmp/arbitrage-bot.pid ]; then
+                kill $(cat /tmp/arbitrage-bot.pid) 2>/dev/null || true
+                sleep 2
+              fi
+              nohup ./target/release/solana-arbitrage-bot > /var/log/arbitrage-bot.log 2>&1 &
+              echo $! > /tmp/arbitrage-bot.pid
+            fi
+
+  # === EMERGENCY PROCEDURES ===
+  - id: emergency-stop
+    type: io.kestra.core.tasks.flows.Switch
+    value: "{{ trigger.type }}"
+    cases:
+      KILL_SWITCH:
+        - id: stop-all-bots
+          type: io.kestra.plugin.scripts.shell.Commands
+          commands:
+            - pkill -f solana-arbitrage-bot
+            - touch {{ vars.bot_path }}/KILL
+            - |
+              curl -s -X POST "${{ envs.DISCORD_WEBHOOK_URL }}" \
+                -H "Content-Type: application/json" \
+                -d '{"content": "🚨 EMERGENCY STOP ACTIVATED! All bots stopped."}' || true
+
+      HIGH_LOSS:
+        - id: reduce-position-size
+          type: io.kestra.plugin.scripts.shell.Commands
+          commands:
+            - |
+              # Update config to reduce risk
+              sed -i 's/max_position_sol: .*/max_position_sol: 1.0/' {{ vars.bot_path }}/config.yaml
+            - # Restart bot with new config
+              if [ -f /tmp/arbitrage-bot.pid ]; then
+                kill $(cat /tmp/arbitrage-bot.pid) 2>/dev/null || true
+                sleep 2
+              fi
+              cd {{ vars.bot_path }}
+              nohup ./target/release/solana-arbitrage-bot --config config.yaml > /var/log/arbitrage-bot.log 2>&1 &
+              echo $! > /tmp/arbitrage-bot.pid
+
+triggers:
+  - id: daily-schedule
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 9 * * *"  # 9 AM daily
+
+  - id: manual-trigger
+    type: io.kestra.plugin.core.trigger.Manual
+
+  - id: webhook-trigger
+    type: io.kestra.plugin.core.trigger.Webhook
+    key: emergency-stop
+
+envs:
+  DISCORD_WEBHOOK_URL: "${{ secrets.DISCORD_WEBHOOK_URL }}"

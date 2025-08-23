@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getApiBase } from "@/lib/api";
 
 interface Trade {
   id: number;
@@ -21,7 +22,8 @@ export default function HistoryPage() {
 
   const fetchTrades = async () => {
     try {
-      const response = await fetch('/api/trades', {
+      const url = `${getApiBase()}/api/trades`;
+      const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {

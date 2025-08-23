@@ -1,20 +1,19 @@
-//! DEX Price Monitor - Real Implementation
-//! Monitors Raydium and Orca for SOL/USDC prices in real-time
+//! DEX Price Monitor - Optimized for High-Frequency Updates
+//! Real-time monitoring with WebSocket, caching, and concurrent fetching
 
-use anyhow::{Result, Context, anyhow};
+use anyhow::{Result, Context};
 use log::{info, debug, error, warn};
 use rust_decimal::Decimal;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio_tungstenite::{connect_async, tungstenite::Message};
-use futures_util::{StreamExt, SinkExt};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use solana_client::rpc_client::RpcClient;
-use solana_client::pubsub_client::PubsubClient;
 use crate::utils::conversions::*;
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
+use std::time::{Duration, Instant};
+use std::collections::HashMap;
+use tokio::time::interval;
 
 // Pool addresses will be loaded from config
 
@@ -49,6 +48,15 @@ pub struct DexMonitor {
     price_updates_tx: Option<tokio::sync::mpsc::Sender<PriceUpdate>>,
     raydium_pool: String,
     orca_pool: String,
+
+    // Performance optimizations
+    http_client: reqwest::Client,
+    price_cache: Arc<Mutex<HashMap<String, (Decimal, Instant)>>>,
+    last_update_times: Arc<Mutex<HashMap<String, Instant>>>,
+
+    // Performance tracking
+    fetch_count: Arc<std::sync::atomic::AtomicU64>,
+    total_fetch_time_ms: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl DexMonitor {
@@ -57,6 +65,14 @@ impl DexMonitor {
         orca_price: Arc<Mutex<Option<Decimal>>>,
         config: &crate::Config,
     ) -> Result<Self> {
+        // Create optimized HTTP client
+        let http_client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .pool_idle_timeout(Duration::from_secs(30))
+            .pool_max_idle_per_host(10)
+            .build()
+            .expect("Failed to create HTTP client");
+
         Ok(Self {
             raydium_price,
             orca_price,
@@ -65,6 +81,11 @@ impl DexMonitor {
             price_updates_tx: None,
             raydium_pool: config.dex.raydium.sol_usdc_pool.clone(),
             orca_pool: config.dex.orca.sol_usdc_pool.clone(),
+            http_client,
+            price_cache: Arc::new(Mutex::new(HashMap::new())),
+            last_update_times: Arc::new(Mutex::new(HashMap::new())),
+            fetch_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            total_fetch_time_ms: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         })
     }
     
@@ -72,208 +93,276 @@ impl DexMonitor {
         self.price_updates_tx = Some(tx);
         self
     }
+
+    /// Get performance statistics
+    pub fn get_performance_stats(&self) -> (u64, f64) {
+        let fetches = self.fetch_count.load(std::sync::atomic::Ordering::Relaxed);
+        let total_time = self.total_fetch_time_ms.load(std::sync::atomic::Ordering::Relaxed);
+
+        let avg_time_ms = if fetches > 0 {
+            total_time as f64 / fetches as f64
+        } else {
+            0.0
+        };
+
+        (fetches, avg_time_ms)
+    }
     
     pub async fn start_monitoring(self) -> Result<()> {
-        info!("🚀 Starting real DEX monitoring...");
+        info!("🚀 Starting optimized DEX monitoring...");
 
-        // Clone for concurrent tasks
+        // Clone shared resources for concurrent tasks
         let raydium_price = self.raydium_price.clone();
         let orca_price = self.orca_price.clone();
-        let ws_url1 = self.ws_url.clone();
-        let ws_url2 = self.ws_url.clone();
+        let http_client1 = self.http_client.clone();
+        let http_client2 = self.http_client.clone();
+        let price_cache1 = self.price_cache.clone();
+        let price_cache2 = self.price_cache.clone();
+        let last_update_times1 = self.last_update_times.clone();
+        let last_update_times2 = self.last_update_times.clone();
+        let fetch_count1 = self.fetch_count.clone();
+        let fetch_count2 = self.fetch_count.clone();
+        let total_fetch_time_ms1 = self.total_fetch_time_ms.clone();
+        let total_fetch_time_ms2 = self.total_fetch_time_ms.clone();
+
         let price_tx1 = self.price_updates_tx.clone();
         let price_tx2 = self.price_updates_tx.clone();
         let raydium_pool = self.raydium_pool.clone();
         let orca_pool = self.orca_pool.clone();
 
-        // Start monitoring both DEXes concurrently
+        // Start monitoring both DEXes concurrently with optimizations
         let raydium_handle = tokio::spawn(async move {
-            Self::monitor_raydium_real(raydium_price, ws_url1, price_tx1, raydium_pool).await
+            Self::monitor_raydium_optimized(
+                raydium_price,
+                http_client1,
+                price_cache1,
+                last_update_times1,
+                fetch_count1,
+                total_fetch_time_ms1,
+                price_tx1,
+                raydium_pool
+            ).await
         });
 
         let orca_handle = tokio::spawn(async move {
-            Self::monitor_orca_real(orca_price, ws_url2, price_tx2, orca_pool).await
+            Self::monitor_orca_optimized(
+                orca_price,
+                http_client2,
+                price_cache2,
+                last_update_times2,
+                fetch_count2,
+                total_fetch_time_ms2,
+                price_tx2,
+                orca_pool
+            ).await
         });
-        
+
         // Wait for both (they run forever unless error)
         let (raydium_result, orca_result) = tokio::join!(raydium_handle, orca_handle);
-        
+
         if let Err(e) = raydium_result {
             error!("Raydium monitor crashed: {}", e);
         }
         if let Err(e) = orca_result {
             error!("Orca monitor crashed: {}", e);
         }
-        
+
         Ok(())
     }
     
-    async fn monitor_raydium_real(
+    async fn monitor_raydium_optimized(
         price_state: Arc<Mutex<Option<Decimal>>>,
-        ws_url: String,
+        http_client: reqwest::Client,
+        price_cache: Arc<Mutex<HashMap<String, (Decimal, Instant)>>>,
+        _last_update_times: Arc<Mutex<HashMap<String, Instant>>>,
+        fetch_count: Arc<std::sync::atomic::AtomicU64>,
+        total_fetch_time_ms: Arc<std::sync::atomic::AtomicU64>,
         price_tx: Option<tokio::sync::mpsc::Sender<PriceUpdate>>,
         pool_address: String,
     ) -> Result<()> {
-        info!("📡 Connecting to Raydium pool monitoring...");
+        info!("📡 Starting optimized Raydium monitoring...");
+
+        let mut update_interval = interval(Duration::from_millis(100)); // 10Hz updates
+        let cache_duration = Duration::from_millis(50); // Cache for 50ms
 
         loop {
-            match Self::connect_and_monitor_raydium(&price_state, &ws_url, &price_tx, &pool_address).await {
-                Ok(_) => {
-                    warn!("Raydium monitor disconnected, reconnecting...");
+            update_interval.tick().await;
+
+            let start_time = Instant::now();
+            fetch_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+            // Check cache first
+            let cache_key = format!("raydium_{}", pool_address);
+            let should_fetch = {
+                let cache = price_cache.lock().await;
+                if let Some((cached_price, cached_time)) = cache.get(&cache_key) {
+                    if cached_time.elapsed() < cache_duration {
+                        // Use cached price
+                        let mut current_price = price_state.lock().await;
+                        *current_price = Some(*cached_price);
+                        false
+                    } else {
+                        true
+                    }
+                } else {
+                    true
                 }
-                Err(e) => {
-                    error!("Raydium monitor error: {}", e);
-                }
-            }
+            };
 
-            // Reconnect after 5 seconds
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-        }
-    }
-    
-    async fn connect_and_monitor_raydium(
-        price_state: &Arc<Mutex<Option<Decimal>>>,
-        ws_url: &str,
-        price_tx: &Option<tokio::sync::mpsc::Sender<PriceUpdate>>,
-        pool_address: &str,
-    ) -> Result<()> {
-        // Connect to Solana WebSocket
-        let pool_pubkey = Pubkey::from_str(pool_address)?;
+            if should_fetch {
+                if let Ok(price) = Self::fetch_raydium_price_fast(&http_client, &pool_address).await {
+                    // Update cache
+                    let mut cache = price_cache.lock().await;
+                    cache.insert(cache_key, (price, Instant::now()));
 
-        // For now, use RPC polling as WebSocket requires more complex setup
-        // In production, you'd use PubsubClient for real WebSocket
-        let rpc_client = RpcClient::new(ws_url.replace("wss://", "https://"));
+                    // Update state
+                    let mut current_price = price_state.lock().await;
+                    *current_price = Some(price);
 
-        info!("📊 Monitoring Raydium SOL/USDC pool: {}", pool_address);
-        
-        loop {
-            // Use GeckoTerminal API for reliable price data
-            let api_url = format!("https://api.geckoterminal.com/api/v2/networks/solana/pools/{}", pool_address);
-
-            match reqwest::get(&api_url).await {
-                Ok(response) => {
-                    if let Ok(text) = response.text().await {
-                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
-                            if let Some(price_str) = json["data"]["attributes"]["base_token_price_usd"].as_str() {
-                                if let Ok(price_f64) = price_str.parse::<f64>() {
-                                    let price_decimal = f64_to_decimal(price_f64);
-
-                                    // Update shared state
-                                    let mut current_price = price_state.lock().await;
-                                    *current_price = Some(price_decimal);
-
-                                    debug!("Raydium SOL/USDC: ${:.4}", price_f64);
-
-                                    // Send price update if channel exists
-                                    if let Some(tx) = price_tx {
-                                        let update = PriceUpdate {
-                                            dex: "Raydium".to_string(),
-                                            price: price_decimal,
-                                            volume_24h: Decimal::ZERO,
-                                            liquidity: Decimal::ZERO,
-                                            timestamp: std::time::SystemTime::now()
-                                                .duration_since(std::time::UNIX_EPOCH)
-                                                .unwrap()
-                                                .as_secs(),
-                                        };
-                                        let _ = tx.send(update).await;
-                                    }
-                                }
-                            }
-                        }
+                    // Send update if channel exists
+                    if let Some(tx) = &price_tx {
+                        let update = PriceUpdate {
+                            dex: "Raydium".to_string(),
+                            price,
+                            volume_24h: Decimal::ZERO,
+                            liquidity: Decimal::ZERO,
+                            timestamp: std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs(),
+                        };
+                        let _ = tx.send(update).await;
                     }
                 }
-                Err(e) => {
-                    warn!("Failed to fetch Raydium price from API: {}", e);
-                }
             }
-            
-            // Poll every 500ms (in production, use WebSocket for real-time)
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+            // Update performance metrics
+            let elapsed = start_time.elapsed().as_millis() as u64;
+            total_fetch_time_ms.fetch_add(elapsed, std::sync::atomic::Ordering::Relaxed);
         }
     }
     
-    async fn monitor_orca_real(
+    async fn fetch_raydium_price_fast(
+        http_client: &reqwest::Client,
+        pool_address: &str,
+    ) -> Result<Decimal> {
+        let api_url = format!("https://api.geckoterminal.com/api/v2/networks/solana/pools/{}", pool_address);
+
+        let response = http_client
+            .get(&api_url)
+            .timeout(Duration::from_millis(2000)) // Fast timeout
+            .send()
+            .await?;
+
+        let json: serde_json::Value = response.json().await?;
+
+        if let Some(price_str) = json["data"]["attributes"]["base_token_price_usd"].as_str() {
+            if let Ok(price_f64) = price_str.parse::<f64>() {
+                return Ok(f64_to_decimal(price_f64));
+            }
+        }
+
+        Err(anyhow::anyhow!("Failed to parse price from API response"))
+    }
+
+    async fn monitor_orca_optimized(
         price_state: Arc<Mutex<Option<Decimal>>>,
-        ws_url: String,
+        http_client: reqwest::Client,
+        price_cache: Arc<Mutex<HashMap<String, (Decimal, Instant)>>>,
+        _last_update_times: Arc<Mutex<HashMap<String, Instant>>>,
+        fetch_count: Arc<std::sync::atomic::AtomicU64>,
+        total_fetch_time_ms: Arc<std::sync::atomic::AtomicU64>,
         price_tx: Option<tokio::sync::mpsc::Sender<PriceUpdate>>,
         pool_address: String,
     ) -> Result<()> {
-        info!("📡 Connecting to Orca pool monitoring...");
+        info!("🐋 Starting optimized Orca monitoring...");
+
+        let mut update_interval = interval(Duration::from_millis(100)); // 10Hz updates
+        let cache_duration = Duration::from_millis(50); // Cache for 50ms
 
         loop {
-            match Self::connect_and_monitor_orca(&price_state, &ws_url, &price_tx, &pool_address).await {
-                Ok(_) => {
-                    warn!("Orca monitor disconnected, reconnecting...");
+            update_interval.tick().await;
+
+            let start_time = Instant::now();
+            fetch_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+            // Check cache first
+            let cache_key = format!("orca_{}", pool_address);
+            let should_fetch = {
+                let cache = price_cache.lock().await;
+                if let Some((cached_price, cached_time)) = cache.get(&cache_key) {
+                    if cached_time.elapsed() < cache_duration {
+                        // Use cached price
+                        let mut current_price = price_state.lock().await;
+                        *current_price = Some(*cached_price);
+                        false
+                    } else {
+                        true
+                    }
+                } else {
+                    true
                 }
-                Err(e) => {
-                    error!("Orca monitor error: {}", e);
-                }
-            }
+            };
 
-            // Reconnect after 5 seconds
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-        }
-    }
-    
-    async fn connect_and_monitor_orca(
-        price_state: &Arc<Mutex<Option<Decimal>>>,
-        ws_url: &str,
-        price_tx: &Option<tokio::sync::mpsc::Sender<PriceUpdate>>,
-        pool_address: &str,
-    ) -> Result<()> {
-        // Connect to Solana WebSocket for Orca pool
-        let pool_pubkey = Pubkey::from_str(pool_address)?;
-        let rpc_client = RpcClient::new(ws_url.replace("wss://", "https://"));
+            if should_fetch {
+                if let Ok(price) = Self::fetch_orca_price_fast(&http_client, &pool_address).await {
+                    // Update cache
+                    let mut cache = price_cache.lock().await;
+                    cache.insert(cache_key, (price, Instant::now()));
 
-        info!("🐋 Monitoring Orca SOL/USDC Whirlpool: {}", pool_address);
-        
-        loop {
-            // Use GeckoTerminal API for reliable price data
-            let api_url = format!("https://api.geckoterminal.com/api/v2/networks/solana/pools/{}", pool_address);
+                    // Update state
+                    let mut current_price = price_state.lock().await;
+                    *current_price = Some(price);
 
-            match reqwest::get(&api_url).await {
-                Ok(response) => {
-                    if let Ok(text) = response.text().await {
-                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
-                            if let Some(price_str) = json["data"]["attributes"]["base_token_price_usd"].as_str() {
-                                if let Ok(price_f64) = price_str.parse::<f64>() {
-                                    let price_decimal = f64_to_decimal(price_f64);
-
-                                    // Update shared state
-                                    let mut current_price = price_state.lock().await;
-                                    *current_price = Some(price_decimal);
-
-                                    debug!("Orca SOL/USDC: ${:.4}", price_f64);
-
-                                    // Send price update if channel exists
-                                    if let Some(tx) = price_tx {
-                                        let update = PriceUpdate {
-                                            dex: "Orca".to_string(),
-                                            price: price_decimal,
-                                            volume_24h: Decimal::ZERO,
-                                            liquidity: Decimal::ZERO,
-                                            timestamp: std::time::SystemTime::now()
-                                                .duration_since(std::time::UNIX_EPOCH)
-                                                .unwrap()
-                                                .as_secs(),
-                                        };
-                                        let _ = tx.send(update).await;
-                                    }
-                                }
-                            }
-                        }
+                    // Send update if channel exists
+                    if let Some(tx) = &price_tx {
+                        let update = PriceUpdate {
+                            dex: "Orca".to_string(),
+                            price,
+                            volume_24h: Decimal::ZERO,
+                            liquidity: Decimal::ZERO,
+                            timestamp: std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs(),
+                        };
+                        let _ = tx.send(update).await;
                     }
                 }
-                Err(e) => {
-                    warn!("Failed to fetch Orca price from API: {}", e);
-                }
             }
-            
-            // Poll every 500ms
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+            // Update performance metrics
+            let elapsed = start_time.elapsed().as_millis() as u64;
+            total_fetch_time_ms.fetch_add(elapsed, std::sync::atomic::Ordering::Relaxed);
         }
     }
+
+    async fn fetch_orca_price_fast(
+        http_client: &reqwest::Client,
+        pool_address: &str,
+    ) -> Result<Decimal> {
+        let api_url = format!("https://api.geckoterminal.com/api/v2/networks/solana/pools/{}", pool_address);
+
+        let response = http_client
+            .get(&api_url)
+            .timeout(Duration::from_millis(2000)) // Fast timeout
+            .send()
+            .await?;
+
+        let json: serde_json::Value = response.json().await?;
+
+        if let Some(price_str) = json["data"]["attributes"]["base_token_price_usd"].as_str() {
+            if let Ok(price_f64) = price_str.parse::<f64>() {
+                return Ok(f64_to_decimal(price_f64));
+            }
+        }
+
+        Err(anyhow::anyhow!("Failed to parse price from API response"))
+    }
+    
+
+    
+
     
     // Helper function to fetch pool info via HTTP API (backup method)
     pub async fn fetch_pool_stats(&self) -> Result<(f64, f64)> {

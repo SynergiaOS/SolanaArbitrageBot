@@ -10,8 +10,7 @@ use std::str::FromStr;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::rpc_config::RpcAccountInfoConfig;
-use spl_token::state::{Mint, Account as TokenAccount};
-use solana_sdk::account::Account;
+use spl_token::state::Mint;
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_program_pack::Pack;
 use std::sync::Arc;
@@ -63,11 +62,15 @@ impl SafetyChecker {
     }
     
     pub async fn check_token(&self, token: &NewToken) -> Result<SafetyResult> {
-        debug!("🔍 Safety checking token: {}", token.mint);
+        info!("🔍 Safety checking token: {} ({})", token.symbol, token.mint);
+        debug!("📋 Safety config - Liquidity: {} SOL, Market Cap: ${}, Holders: {}, Dev: {}%, Age: {} min",
+               self.config.min_liquidity_sol, self.config.max_market_cap_usd,
+               self.config.min_holders, self.config.max_dev_percentage,
+               self.config.max_token_age_minutes);
 
         // Jeśli safety checks są wyłączone, zwróć Safe
         if !self.config.enable_safety_checks {
-            debug!("⚠️ Safety checks disabled, skipping all checks");
+            warn!("⚠️ SAFETY CHECKS DISABLED - This is unsafe!");
             return Ok(SafetyResult::Safe);
         }
         
@@ -110,10 +113,14 @@ impl SafetyChecker {
         }
         
         debug!("🔄 Passed basic safety checks, running advanced checks...");
-        // Check market cap (jeśli skonfigurowane)
+
+        // Check market cap (KRYTYCZNE - zawsze sprawdzane jeśli skonfigurowane)
         if self.config.max_market_cap_usd > 0.0 {
+            debug!("📊 Checking market cap (max: ${})", self.config.max_market_cap_usd);
             if let Ok(market_cap) = self.calculate_market_cap(token).await {
                 if market_cap > self.config.max_market_cap_usd {
+                    warn!("❌ MARKET CAP FILTER: Token rejected - ${:.0} > ${:.0}",
+                          market_cap, self.config.max_market_cap_usd);
                     return Ok(SafetyResult::Unsafe(
                         format!("Market cap too high: ${:.0} (max ${:.0})",
                             market_cap, self.config.max_market_cap_usd)
@@ -123,12 +130,17 @@ impl SafetyChecker {
             } else {
                 warn!("⚠️ Could not calculate market cap for {}", token.mint);
             }
+        } else {
+            warn!("⚠️ Market cap check DISABLED (max_market_cap_usd = 0)");
         }
 
-        // Check holder count (jeśli skonfigurowane)
+        // Check holder count (KRYTYCZNE - zawsze sprawdzane jeśli skonfigurowane)
         if self.config.min_holders > 0 {
+            debug!("👥 Checking holder count (min: {})", self.config.min_holders);
             if let Ok(holder_count) = self.get_token_holders(token).await {
                 if holder_count < self.config.min_holders {
+                    warn!("❌ HOLDER COUNT FILTER: Token rejected - {} < {} holders",
+                          holder_count, self.config.min_holders);
                     return Ok(SafetyResult::Unsafe(
                         format!("Too few holders: {} (min {})",
                             holder_count, self.config.min_holders)
@@ -138,12 +150,17 @@ impl SafetyChecker {
             } else {
                 warn!("⚠️ Could not get holder count for {}", token.mint);
             }
+        } else {
+            warn!("⚠️ Holder count check DISABLED (min_holders = 0)");
         }
 
-        // Check dev percentage (jeśli skonfigurowane)
+        // Check dev percentage (KRYTYCZNE - zawsze sprawdzane jeśli skonfigurowane)
         if self.config.max_dev_percentage > 0.0 {
+            debug!("🔍 Checking dev percentage (max: {:.1}%)", self.config.max_dev_percentage);
             if let Ok(dev_percentage) = self.check_dev_percentage(token).await {
                 if dev_percentage > self.config.max_dev_percentage {
+                    warn!("❌ DEV PERCENTAGE FILTER: Token rejected - {:.1}% > {:.1}%",
+                          dev_percentage, self.config.max_dev_percentage);
                     return Ok(SafetyResult::Unsafe(
                         format!("Dev concentration too high: {:.1}% (max {:.1}%)",
                             dev_percentage, self.config.max_dev_percentage)
@@ -153,12 +170,17 @@ impl SafetyChecker {
             } else {
                 warn!("⚠️ Could not check dev percentage for {}", token.mint);
             }
+        } else {
+            warn!("⚠️ Dev percentage check DISABLED (max_dev_percentage = 0)");
         }
 
-        // Check token age (jeśli skonfigurowane)
+        // Check token age (KRYTYCZNE - zawsze sprawdzane jeśli skonfigurowane)
         if self.config.max_token_age_minutes > 0 {
+            debug!("⏰ Checking token age (max: {} minutes)", self.config.max_token_age_minutes);
             if let Ok(age_minutes) = self.get_token_age(token).await {
                 if age_minutes > self.config.max_token_age_minutes {
+                    warn!("❌ TOKEN AGE FILTER: Token rejected - {} > {} minutes",
+                          age_minutes, self.config.max_token_age_minutes);
                     return Ok(SafetyResult::Unsafe(
                         format!("Token too old: {} minutes (max {} minutes)",
                             age_minutes, self.config.max_token_age_minutes)
@@ -167,6 +189,38 @@ impl SafetyChecker {
                 debug!("✅ Token age check passed: {} minutes", age_minutes);
             } else {
                 warn!("⚠️ Could not determine token age for {}", token.mint);
+            }
+        } else {
+            warn!("⚠️ Token age check DISABLED (max_token_age_minutes = 0)");
+        }
+
+        // KRYTYCZNE: Enhanced checks using Helius API
+        if let Ok(enhanced_data) = self.enhanced_token_analysis(&token.mint).await {
+            // Check if token is frozen (major red flag)
+            if enhanced_data.is_frozen {
+                warn!("❌ FROZEN TOKEN: {} - Token is frozen!", token.mint);
+                return Ok(SafetyResult::Unsafe("Token is frozen".to_string()));
+            }
+
+            // Check if token is mutable (potential rug pull risk)
+            if enhanced_data.is_mutable {
+                warn!("⚠️ MUTABLE TOKEN: {} - Token metadata can be changed", token.mint);
+                // Don't reject, but log warning
+            }
+
+            // Check if token is verified (green flag)
+            if enhanced_data.is_verified {
+                debug!("✅ VERIFIED TOKEN: {} - Token is verified", token.mint);
+            }
+        }
+
+        // Check for suspicious transaction patterns
+        if let Ok(patterns) = self.check_transaction_patterns(&token.mint).await {
+            if !patterns.is_empty() {
+                for pattern in &patterns {
+                    warn!("🚨 SUSPICIOUS PATTERN: {} - {}", token.mint, pattern);
+                }
+                return Ok(SafetyResult::Unsafe(format!("Suspicious patterns: {:?}", patterns)));
             }
         }
 
@@ -512,4 +566,212 @@ impl SafetyChecker {
     pub fn add_blacklisted_keyword(&mut self, keyword: String) {
         self.blacklisted_keywords.insert(keyword.to_lowercase());
     }
+
+    /// Enhanced token analysis using Helius API
+    pub async fn enhanced_token_analysis(&self, mint: &Pubkey) -> Result<EnhancedTokenData> {
+        if let Some(api_key) = &self.config.helius_api_key {
+            match self.get_enhanced_token_data(mint, api_key).await {
+                Ok(data) => {
+                    debug!("✅ Enhanced token analysis completed for {}", mint);
+                    Ok(data)
+                }
+                Err(e) => {
+                    warn!("⚠️ Enhanced token analysis failed: {}", e);
+                    Err(e)
+                }
+            }
+        } else {
+            Err(anyhow!("Helius API key not configured"))
+        }
+    }
+
+    /// Get enhanced token data from Helius API
+    async fn get_enhanced_token_data(&self, mint: &Pubkey, api_key: &str) -> Result<EnhancedTokenData> {
+        let url = format!("https://api.helius.xyz/v0/tokens/{}/metadata?api-key={}", mint, api_key);
+
+        let response = self.http_client
+            .get(&url)
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(anyhow!("Helius API error: {}", response.status()));
+        }
+
+        let json: serde_json::Value = response.json().await?;
+
+        // Parse enhanced data
+        let mut data = EnhancedTokenData::default();
+
+        if let Some(creation_time) = json.get("created_at").and_then(|v| v.as_str()) {
+            data.creation_time = Some(creation_time.to_string());
+        }
+
+        if let Some(creator) = json.get("creator").and_then(|v| v.as_str()) {
+            if let Ok(pubkey) = Pubkey::from_str(creator) {
+                data.creator = Some(pubkey);
+            }
+        }
+
+        if let Some(verified) = json.get("verified").and_then(|v| v.as_bool()) {
+            data.is_verified = verified;
+        }
+
+        if let Some(frozen) = json.get("frozen").and_then(|v| v.as_bool()) {
+            data.is_frozen = frozen;
+        }
+
+        if let Some(mutable) = json.get("mutable").and_then(|v| v.as_bool()) {
+            data.is_mutable = mutable;
+        }
+
+        debug!("📊 Enhanced data: verified={}, frozen={}, mutable={}",
+               data.is_verified, data.is_frozen, data.is_mutable);
+
+        Ok(data)
+    }
+
+    /// Check for suspicious patterns using Helius transaction data
+    pub async fn check_transaction_patterns(&self, mint: &Pubkey) -> Result<Vec<String>> {
+        if let Some(api_key) = &self.config.helius_api_key {
+            match self.analyze_transaction_patterns(mint, api_key).await {
+                Ok(patterns) => Ok(patterns),
+                Err(e) => {
+                    warn!("⚠️ Transaction pattern analysis failed: {}", e);
+                    Ok(vec![])
+                }
+            }
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    /// Analyze transaction patterns for suspicious activity
+    async fn analyze_transaction_patterns(&self, mint: &Pubkey, api_key: &str) -> Result<Vec<String>> {
+        let url = format!("https://api.helius.xyz/v0/tokens/{}/transactions?api-key={}", mint, api_key);
+
+        let response = self.http_client
+            .get(&url)
+            .timeout(std::time::Duration::from_secs(15))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(anyhow!("Helius API error: {}", response.status()));
+        }
+
+        let json: serde_json::Value = response.json().await?;
+        let mut suspicious_patterns = Vec::new();
+
+        if let Some(transactions) = json.as_array() {
+            // Analyze transaction patterns
+            let mut large_transfers = 0;
+            let mut rapid_trades = 0;
+            let mut wash_trades = 0;
+
+            for tx in transactions {
+                if let Some(amount) = tx.get("amount").and_then(|v| v.as_f64()) {
+                    if amount > 1000000.0 { // Large transfer
+                        large_transfers += 1;
+                    }
+                }
+
+                // Check for rapid trading patterns
+                if let Some(timestamp) = tx.get("timestamp").and_then(|v| v.as_u64()) {
+                    // This would need more sophisticated analysis
+                    // For now, just count transactions
+                    rapid_trades += 1;
+                }
+            }
+
+            if large_transfers > 5 {
+                suspicious_patterns.push("Multiple large transfers detected".to_string());
+            }
+
+            if rapid_trades > 20 {
+                suspicious_patterns.push("High transaction frequency detected".to_string());
+            }
+
+            if wash_trades > 3 {
+                suspicious_patterns.push("Potential wash trading detected".to_string());
+            }
+        }
+
+        Ok(suspicious_patterns)
+    }
+
+    /// Get real-time token metrics from Helius
+    pub async fn get_realtime_metrics(&self, mint: &Pubkey) -> Result<RealTimeMetrics> {
+        if let Some(api_key) = &self.config.helius_api_key {
+            match self.fetch_realtime_metrics(mint, api_key).await {
+                Ok(metrics) => Ok(metrics),
+                Err(e) => {
+                    warn!("⚠️ Real-time metrics fetch failed: {}", e);
+                    Err(e)
+                }
+            }
+        } else {
+            Err(anyhow!("Helius API key not configured"))
+        }
+    }
+
+    /// Fetch real-time metrics from Helius API
+    async fn fetch_realtime_metrics(&self, mint: &Pubkey, api_key: &str) -> Result<RealTimeMetrics> {
+        let url = format!("https://api.helius.xyz/v0/tokens/{}/metrics?api-key={}", mint, api_key);
+
+        let response = self.http_client
+            .get(&url)
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(anyhow!("Helius API error: {}", response.status()));
+        }
+
+        let json: serde_json::Value = response.json().await?;
+
+        let mut metrics = RealTimeMetrics::default();
+
+        if let Some(price) = json.get("price").and_then(|v| v.as_f64()) {
+            metrics.current_price = price;
+        }
+
+        if let Some(volume) = json.get("volume_24h").and_then(|v| v.as_f64()) {
+            metrics.volume_24h = volume;
+        }
+
+        if let Some(holders) = json.get("holder_count").and_then(|v| v.as_u64()) {
+            metrics.holder_count = holders as u32;
+        }
+
+        if let Some(market_cap) = json.get("market_cap").and_then(|v| v.as_f64()) {
+            metrics.market_cap = market_cap;
+        }
+
+        debug!("📊 Real-time metrics: price=${:.8}, volume=${:.0}, holders={}, mcap=${:.0}",
+               metrics.current_price, metrics.volume_24h, metrics.holder_count, metrics.market_cap);
+
+        Ok(metrics)
+    }
+}
+
+/// Enhanced token data from Helius API
+#[derive(Debug, Clone, Default)]
+pub struct EnhancedTokenData {
+    pub creation_time: Option<String>,
+    pub creator: Option<Pubkey>,
+    pub is_verified: bool,
+    pub is_frozen: bool,
+    pub is_mutable: bool,
+}
+
+/// Real-time token metrics from Helius API
+#[derive(Debug, Clone, Default)]
+pub struct RealTimeMetrics {
+    pub current_price: f64,
+    pub volume_24h: f64,
+    pub holder_count: u32,
+    pub market_cap: f64,
 }

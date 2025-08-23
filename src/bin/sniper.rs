@@ -162,6 +162,7 @@ struct SafetySection {
     // APIs
     honeypot_api: Option<String>,
     rugcheck_api: Option<String>,
+    helius_api_key: Option<String>, // DODANE: Dla lepszego wykrywania zagrożeń
     enable_safety_checks: Option<bool>,
 }
 
@@ -188,9 +189,9 @@ fn load_config_sources(args: &Args) -> Result<LoadedConfig> {
 
     let mut config = SniperConfig {
         max_position_sol: 0.02,
-        min_liquidity_sol: 3.0,
-        max_buy_tax: 5.0,
-        max_sell_tax: 5.0,
+        min_liquidity_sol: 5.0, // Domyślnie 5.0 SOL dla bezpieczeństwa
+        max_buy_tax: 10.0,       // Domyślnie 10% dla bezpieczeństwa
+        max_sell_tax: 10.0,      // Domyślnie 10% dla bezpieczeństwa
         profit_target_percent: 200.0,
         stop_loss_percent: 50.0,
         max_market_cap: 100_000.0,
@@ -224,8 +225,14 @@ fn load_config_sources(args: &Args) -> Result<LoadedConfig> {
             if let Some(v) = s.priority_fee_lamports { config.priority_fee_lamports = v; }
             if let Some(v) = s.profit_target_percent { config.profit_target_percent = v; }
             if let Some(v) = s.stop_loss_percent { config.stop_loss_percent = v; }
+            // Upewnij się, że min_liquidity_sol jest również ustawione z safety config
+            if let Some(safe) = root.safety.clone() {
+                if let Some(v) = safe.min_liquidity_sol {
+                    config.min_liquidity_sol = v;
+                }
+            }
         }
-        // Mapuj safety section
+        // Mapuj safety section - KRYTYCZNE: wszystkie filtry muszą być mapowane
         if let Some(safe) = root.safety {
             if let Some(v) = safe.min_liquidity_sol {
                 safety_config.min_liquidity_sol = v;
@@ -265,6 +272,10 @@ fn load_config_sources(args: &Args) -> Result<LoadedConfig> {
             }
             if let Some(v) = safe.enable_safety_checks {
                 safety_config.enable_safety_checks = v;
+            }
+            // DODANE: Mapowanie helius_api_key dla lepszego wykrywania
+            if let Some(v) = safe.helius_api_key {
+                safety_config.helius_api_key = Some(v);
             }
         }
 

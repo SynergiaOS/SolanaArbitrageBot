@@ -1,0 +1,44 @@
+# Solana Arbitrage Bot - Devnet Configuration
+# Safe testing environment with devnet tokens
+
+rpc:
+  url: "https://api.devnet.solana.com"
+  ws_url: "wss://api.devnet.solana.com"
+
+wallet:
+  path: "./devnet_wallet.json"  # Generate with: solana-keygen new --outfile devnet_wallet.json
+
+# DEX configuration for devnet
+dex:
+  raydium:
+    program_id: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"
+    sol_usdc_pool: "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2"  # May not exist on devnet
+  orca:
+    program_id: "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"
+    sol_usdc_pool: "HJPjoWUrhoZzkNfRpHuieeFk9WcZWjwy6PBjZ81ngndJ"  # May not exist on devnet
+
+# Conservative limits for testing
+limits:
+  max_position_sol: 0.1        # Small positions for testing
+  min_profit_percent: 0.5      # Higher threshold
+  min_profit_usd: 0.01         # Lower minimum
+  max_slippage_percent: 1.0    # Higher slippage tolerance
+  max_daily_loss_usd: 1.0      # Low daily loss limit
+  max_daily_trades: 10         # Fewer trades
+
+execution:
+  priority_fee_lamports: 1000  # Lower fees on devnet
+  simulation_required: true
+  max_retries: 3
+
+# Web dashboard (optional)
+web:
+  enabled: true
+  host: "127.0.0.1"
+  port: 3001
+  auth_token: "devnet-test-token"
+  database_path: "./data/devnet_dashboard.db"
+
+# Discord alerts (optional)
+discord:
+  enabled: false  # Disable for testing

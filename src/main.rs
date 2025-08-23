@@ -81,10 +81,10 @@ async fn main() -> Result<()> {
     // Load configuration
     let config = load_config(&args.config)?;
     
-    // Override max position if specified
-    let max_position = args.max_position.unwrap_or(decimal_to_f64(config.limits.max_position_sol));
-    info!("Max position: {} SOL", max_position);
-    
+    // Override max position if specified - kept for CLI, but runtime config may override later
+    let cli_max_position = args.max_position;
+    if let Some(v) = cli_max_position { info!("CLI override max position: {} SOL", v); }
+
     // Initialize shared state
     let state = SharedState {
         raydium_price: Arc::new(Mutex::new(None)),
@@ -104,16 +104,24 @@ async fn main() -> Result<()> {
     )?
     .with_price_channel(price_tx);
     
-    let calculator = calculator::ProfitCalculator::new(&config);
+    let mut calculator = calculator::ProfitCalculator::new(&config);
     let executor = executor::TransactionExecutor::new(&config, args.dry_run)?;
-    let safety = safety::SafetyGuard::new(&config);
+    let mut safety = safety::SafetyGuard::new(&config);
 
-    // Setup Discord alerts
-    let discord = if let Some(discord_config) = &config.discord {
-        Some(discord::DiscordAlert::new(
-            discord_config.webhook_url.clone(),
-            discord_config.enabled,
-        ))
+    // Setup Discord alerts (ENV overrides)
+    // Prefer DISCORD_WEBHOOK_URL and DISCORD_ENABLED over config file values
+    let webhook_env = std::env::var("DISCORD_WEBHOOK_URL").ok();
+    let enabled_env = std::env::var("DISCORD_ENABLED")
+        .ok()
+        .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "True"));
+
+    let discord = if webhook_env.is_some() || config.discord.is_some() {
+        let webhook = webhook_env
+            .or_else(|| config.discord.as_ref().map(|c| c.webhook_url.clone()))
+            .unwrap_or_default();
+        let enabled = enabled_env
+            .unwrap_or_else(|| config.discord.as_ref().map(|c| c.enabled).unwrap_or(false));
+        Some(discord::DiscordAlert::new(webhook, enabled))
     } else {
         None
     };
@@ -121,7 +129,7 @@ async fn main() -> Result<()> {
     // Setup Web Dashboard
     let web_server = if let Some(web_config) = &config.web {
         if web_config.enabled {
-            match web::WebServer::new(state.clone(), web_config.clone(), discord.clone()).await {
+            match web::WebServer::new(state.clone(), web_config.clone(), discord.clone(), &config).await {
                 Ok(server) => {
                     info!("🌐 Web dashboard initialized");
                     Some(server)
@@ -161,12 +169,21 @@ async fn main() -> Result<()> {
         }
     }
     
-    // Get WebSocket sender and database references before moving web_server
-    let (websocket_tx, web_db) = if let Some(ref web_server) = web_server {
-        (Some(web_server.get_websocket_sender()), Some(web_server.get_database()))
+    // Get WebSocket sender, database, and runtime config references before moving web_server
+    let (websocket_tx, web_db, runtime_cfg) = if let Some(ref web_server) = web_server {
+        (
+            Some(web_server.get_websocket_sender()),
+            Some(web_server.get_database()),
+            Some(web_server.get_runtime_config()),
+        )
     } else {
-        (None, None)
+        (None, None, None)
     };
+
+    // Attach runtime_config to SafetyGuard for live updates of daily limits
+    if let Some(ref arc_cfg) = runtime_cfg {
+        safety = safety.with_runtime_config(arc_cfg.clone());
+    }
 
     // Start web server in background
     let web_handle = if let Some(web_server) = web_server {
@@ -255,11 +272,20 @@ async fn main() -> Result<()> {
         let orca = *state.orca_price.lock().await;
         
         if let (Some(price_r), Some(price_o)) = (raydium, orca) {
+            // Read runtime config values (with CLI override for max_position if provided)
+            let (min_profit_usd_runtime, max_position_runtime) = if let Some(ref arc_cfg) = runtime_cfg {
+                let cfg = arc_cfg.read().await.clone();
+                (decimal_to_f64(cfg.min_profit_usd), decimal_to_f64(cfg.max_position_sol))
+            } else {
+                (decimal_to_f64(config.limits.min_profit_usd), decimal_to_f64(config.limits.max_position_sol))
+            };
+            let max_position_effective = cli_max_position.unwrap_or(max_position_runtime);
+
             // Calculate arbitrage opportunity
             if let Some(opportunity) = calculator.calculate_opportunity(
                 decimal_to_f64(price_r),
                 decimal_to_f64(price_o),
-                max_position,
+                max_position_effective,
             ) {
                 opportunities_found += 1;
                 last_opportunity_time = std::time::Instant::now();
@@ -287,11 +313,11 @@ async fn main() -> Result<()> {
                         warn!("Failed to send Discord opportunity alert: {}", e);
                     }
                 }
-                
-                // Execute if profitable enough and confidence is high
-                if opportunity.profit_after_fees_usd >= decimal_to_f64(config.limits.min_profit_usd)
+
+                // Execute if profitable enough and confidence is high (min_profit_usd from runtime config)
+                if opportunity.profit_after_fees_usd >= min_profit_usd_runtime
                     && opportunity.confidence_score > 0.5 {
-                    
+
                     // Pre-trade safety check
                     if !safety.pre_trade_check(&opportunity, config.wallet.use_ledger.unwrap_or(false)).await? {
                         warn!("⚠️ Safety check failed, skipping trade");
@@ -465,7 +491,9 @@ async fn test_api_connections() -> Result<()> {
 fn load_config(path: &str) -> Result<Config> {
     let settings = config::Config::builder()
         .add_source(config::File::with_name(path))
+        // Allow environment overrides, e.g. BOT__WEB__AUTH_TOKEN, BOT__RPC__URL
+        .add_source(config::Environment::with_prefix("BOT").separator("__").try_parsing(true))
         .build()?;
-    
+
     Ok(settings.try_deserialize()?)
 }

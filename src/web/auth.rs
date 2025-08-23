@@ -3,7 +3,6 @@
 use axum::{
     extract::Request,
     http::{HeaderMap, StatusCode},
-    middleware::Next,
     response::Response,
 };
 use tower::{Layer, Service};
