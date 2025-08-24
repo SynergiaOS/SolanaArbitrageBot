@@ -1,20 +1,20 @@
 //! Safety Checker - Protects against honeypots and scams
 
 use crate::sniper::{NewToken, SafetyConfig};
-use anyhow::{Result, anyhow};
-use log::{info, warn, debug};
+use anyhow::{anyhow, Result};
+use log::{debug, info, warn};
 use reqwest::Client;
-use std::collections::HashSet;
-use solana_sdk::pubkey::Pubkey;
-use std::str::FromStr;
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_account_decoder::UiAccountEncoding;
-use solana_client::rpc_config::RpcAccountInfoConfig;
-use spl_token::state::Mint;
-use solana_sdk::commitment_config::CommitmentConfig;
-use solana_program_pack::Pack;
-use std::sync::Arc;
 use serde_json;
+use solana_account_decoder::UiAccountEncoding;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_client::rpc_config::RpcAccountInfoConfig;
+use solana_program_pack::Pack;
+use solana_sdk::commitment_config::CommitmentConfig;
+use solana_sdk::pubkey::Pubkey;
+use spl_token::state::Mint;
+use std::collections::HashSet;
+use std::str::FromStr;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub enum SafetyResult {
@@ -47,7 +47,8 @@ impl SafetyChecker {
         }
 
         // Konwertuj blacklist_keywords na lowercase HashSet
-        let blacklisted_keywords: HashSet<String> = config.blacklist_keywords
+        let blacklisted_keywords: HashSet<String> = config
+            .blacklist_keywords
             .iter()
             .map(|k| k.to_lowercase())
             .collect();
@@ -60,9 +61,12 @@ impl SafetyChecker {
             blacklisted_keywords,
         }
     }
-    
+
     pub async fn check_token(&self, token: &NewToken) -> Result<SafetyResult> {
-        info!("🔍 Safety checking token: {} ({})", token.symbol, token.mint);
+        info!(
+            "🔍 Safety checking token: {} ({})",
+            token.symbol, token.mint
+        );
         debug!("📋 Safety config - Liquidity: {} SOL, Market Cap: ${}, Holders: {}, Dev: {}%, Age: {} min",
                self.config.min_liquidity_sol, self.config.max_market_cap_usd,
                self.config.min_holders, self.config.max_dev_percentage,
@@ -73,58 +77,67 @@ impl SafetyChecker {
             warn!("⚠️ SAFETY CHECKS DISABLED - This is unsafe!");
             return Ok(SafetyResult::Safe);
         }
-        
+
         // Check blacklisted creators
         if self.blacklisted_creators.contains(&token.creator) {
             return Ok(SafetyResult::Unsafe("Blacklisted creator".to_string()));
         }
-        
+
         // Check token name/symbol for suspicious keywords
         if self.has_suspicious_keywords(token) {
             return Ok(SafetyResult::Unsafe("Suspicious name/symbol".to_string()));
         }
-        
+
         // Check minimum liquidity (konwertuj SOL na lamports)
         let min_liquidity_lamports = (self.config.min_liquidity_sol * 1_000_000_000.0) as u64;
         if token.initial_liquidity < min_liquidity_lamports {
-            return Ok(SafetyResult::Unsafe(
-                format!("Insufficient liquidity: {} < {} SOL",
-                    token.initial_liquidity as f64 / 1_000_000_000.0,
-                    self.config.min_liquidity_sol)
-            ));
+            return Ok(SafetyResult::Unsafe(format!(
+                "Insufficient liquidity: {} < {} SOL",
+                token.initial_liquidity as f64 / 1_000_000_000.0,
+                self.config.min_liquidity_sol
+            )));
         }
-        
+
         // Check honeypot (external API)
         if let Ok(is_honeypot) = self.check_honeypot_api(&token.mint).await {
             if is_honeypot {
                 return Ok(SafetyResult::Unsafe("Honeypot detected".to_string()));
             }
         }
-        
+
         // Check token taxes (używaj progów z config)
         if let Ok((buy_tax, sell_tax)) = self.check_token_taxes(&token.mint).await {
-            if buy_tax > self.config.max_buy_tax_percent || sell_tax > self.config.max_sell_tax_percent {
-                return Ok(SafetyResult::Unsafe(
-                    format!("High taxes: buy {}% (max {}%), sell {}% (max {}%)",
-                        buy_tax, self.config.max_buy_tax_percent,
-                        sell_tax, self.config.max_sell_tax_percent)
-                ));
+            if buy_tax > self.config.max_buy_tax_percent
+                || sell_tax > self.config.max_sell_tax_percent
+            {
+                return Ok(SafetyResult::Unsafe(format!(
+                    "High taxes: buy {}% (max {}%), sell {}% (max {}%)",
+                    buy_tax,
+                    self.config.max_buy_tax_percent,
+                    sell_tax,
+                    self.config.max_sell_tax_percent
+                )));
             }
         }
-        
+
         debug!("🔄 Passed basic safety checks, running advanced checks...");
 
         // Check market cap (KRYTYCZNE - zawsze sprawdzane jeśli skonfigurowane)
         if self.config.max_market_cap_usd > 0.0 {
-            debug!("📊 Checking market cap (max: ${})", self.config.max_market_cap_usd);
+            debug!(
+                "📊 Checking market cap (max: ${})",
+                self.config.max_market_cap_usd
+            );
             if let Ok(market_cap) = self.calculate_market_cap(token).await {
                 if market_cap > self.config.max_market_cap_usd {
-                    warn!("❌ MARKET CAP FILTER: Token rejected - ${:.0} > ${:.0}",
-                          market_cap, self.config.max_market_cap_usd);
-                    return Ok(SafetyResult::Unsafe(
-                        format!("Market cap too high: ${:.0} (max ${:.0})",
-                            market_cap, self.config.max_market_cap_usd)
-                    ));
+                    warn!(
+                        "❌ MARKET CAP FILTER: Token rejected - ${:.0} > ${:.0}",
+                        market_cap, self.config.max_market_cap_usd
+                    );
+                    return Ok(SafetyResult::Unsafe(format!(
+                        "Market cap too high: ${:.0} (max ${:.0})",
+                        market_cap, self.config.max_market_cap_usd
+                    )));
                 }
                 debug!("✅ Market cap check passed: ${:.0}", market_cap);
             } else {
@@ -136,15 +149,20 @@ impl SafetyChecker {
 
         // Check holder count (KRYTYCZNE - zawsze sprawdzane jeśli skonfigurowane)
         if self.config.min_holders > 0 {
-            debug!("👥 Checking holder count (min: {})", self.config.min_holders);
+            debug!(
+                "👥 Checking holder count (min: {})",
+                self.config.min_holders
+            );
             if let Ok(holder_count) = self.get_token_holders(token).await {
                 if holder_count < self.config.min_holders {
-                    warn!("❌ HOLDER COUNT FILTER: Token rejected - {} < {} holders",
-                          holder_count, self.config.min_holders);
-                    return Ok(SafetyResult::Unsafe(
-                        format!("Too few holders: {} (min {})",
-                            holder_count, self.config.min_holders)
-                    ));
+                    warn!(
+                        "❌ HOLDER COUNT FILTER: Token rejected - {} < {} holders",
+                        holder_count, self.config.min_holders
+                    );
+                    return Ok(SafetyResult::Unsafe(format!(
+                        "Too few holders: {} (min {})",
+                        holder_count, self.config.min_holders
+                    )));
                 }
                 debug!("✅ Holder count check passed: {} holders", holder_count);
             } else {
@@ -156,15 +174,20 @@ impl SafetyChecker {
 
         // Check dev percentage (KRYTYCZNE - zawsze sprawdzane jeśli skonfigurowane)
         if self.config.max_dev_percentage > 0.0 {
-            debug!("🔍 Checking dev percentage (max: {:.1}%)", self.config.max_dev_percentage);
+            debug!(
+                "🔍 Checking dev percentage (max: {:.1}%)",
+                self.config.max_dev_percentage
+            );
             if let Ok(dev_percentage) = self.check_dev_percentage(token).await {
                 if dev_percentage > self.config.max_dev_percentage {
-                    warn!("❌ DEV PERCENTAGE FILTER: Token rejected - {:.1}% > {:.1}%",
-                          dev_percentage, self.config.max_dev_percentage);
-                    return Ok(SafetyResult::Unsafe(
-                        format!("Dev concentration too high: {:.1}% (max {:.1}%)",
-                            dev_percentage, self.config.max_dev_percentage)
-                    ));
+                    warn!(
+                        "❌ DEV PERCENTAGE FILTER: Token rejected - {:.1}% > {:.1}%",
+                        dev_percentage, self.config.max_dev_percentage
+                    );
+                    return Ok(SafetyResult::Unsafe(format!(
+                        "Dev concentration too high: {:.1}% (max {:.1}%)",
+                        dev_percentage, self.config.max_dev_percentage
+                    )));
                 }
                 debug!("✅ Dev percentage check passed: {:.1}%", dev_percentage);
             } else {
@@ -176,15 +199,20 @@ impl SafetyChecker {
 
         // Check token age (KRYTYCZNE - zawsze sprawdzane jeśli skonfigurowane)
         if self.config.max_token_age_minutes > 0 {
-            debug!("⏰ Checking token age (max: {} minutes)", self.config.max_token_age_minutes);
+            debug!(
+                "⏰ Checking token age (max: {} minutes)",
+                self.config.max_token_age_minutes
+            );
             if let Ok(age_minutes) = self.get_token_age(token).await {
                 if age_minutes > self.config.max_token_age_minutes {
-                    warn!("❌ TOKEN AGE FILTER: Token rejected - {} > {} minutes",
-                          age_minutes, self.config.max_token_age_minutes);
-                    return Ok(SafetyResult::Unsafe(
-                        format!("Token too old: {} minutes (max {} minutes)",
-                            age_minutes, self.config.max_token_age_minutes)
-                    ));
+                    warn!(
+                        "❌ TOKEN AGE FILTER: Token rejected - {} > {} minutes",
+                        age_minutes, self.config.max_token_age_minutes
+                    );
+                    return Ok(SafetyResult::Unsafe(format!(
+                        "Token too old: {} minutes (max {} minutes)",
+                        age_minutes, self.config.max_token_age_minutes
+                    )));
                 }
                 debug!("✅ Token age check passed: {} minutes", age_minutes);
             } else {
@@ -204,7 +232,10 @@ impl SafetyChecker {
 
             // Check if token is mutable (potential rug pull risk)
             if enhanced_data.is_mutable {
-                warn!("⚠️ MUTABLE TOKEN: {} - Token metadata can be changed", token.mint);
+                warn!(
+                    "⚠️ MUTABLE TOKEN: {} - Token metadata can be changed",
+                    token.mint
+                );
                 // Don't reject, but log warning
             }
 
@@ -220,7 +251,10 @@ impl SafetyChecker {
                 for pattern in &patterns {
                     warn!("🚨 SUSPICIOUS PATTERN: {} - {}", token.mint, pattern);
                 }
-                return Ok(SafetyResult::Unsafe(format!("Suspicious patterns: {:?}", patterns)));
+                return Ok(SafetyResult::Unsafe(format!(
+                    "Suspicious patterns: {:?}",
+                    patterns
+                )));
             }
         }
 
@@ -233,18 +267,21 @@ impl SafetyChecker {
         debug!("📊 Calculating market cap for token: {}", token.mint);
 
         // 1. Pobierz mint account dla total supply
-        let mint_account = self.rpc_client
+        let mint_account = self
+            .rpc_client
             .get_account_with_config(
                 &token.mint,
                 RpcAccountInfoConfig {
                     encoding: Some(UiAccountEncoding::Base64),
                     ..Default::default()
-                }
+                },
             )
             .await?;
 
         // 2. Deserializuj mint data
-        let account = mint_account.value.ok_or_else(|| anyhow!("Mint account not found"))?;
+        let account = mint_account
+            .value
+            .ok_or_else(|| anyhow!("Mint account not found"))?;
         let mint_data = Mint::unpack(&account.data)?;
         let total_supply = mint_data.supply as f64 / 10_f64.powi(mint_data.decimals as i32);
 
@@ -254,7 +291,10 @@ impl SafetyChecker {
         let price_per_token = if token.liquidity_token > 0.0 {
             token.liquidity_sol / token.liquidity_token
         } else {
-            return Err(anyhow!("Invalid token liquidity: {}", token.liquidity_token));
+            return Err(anyhow!(
+                "Invalid token liquidity: {}",
+                token.liquidity_token
+            ));
         };
 
         debug!("💰 Price per token: ${:.8}", price_per_token);
@@ -285,9 +325,13 @@ impl SafetyChecker {
 
     /// Get holder count using Helius Enhanced API
     async fn get_holders_helius(&self, mint: &Pubkey, api_key: &str) -> Result<u32> {
-        let url = format!("https://api.helius.xyz/v0/tokens/{}/holders?api-key={}", mint, api_key);
+        let url = format!(
+            "https://api.helius.xyz/v0/tokens/{}/holders?api-key={}",
+            mint, api_key
+        );
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&url)
             .timeout(std::time::Duration::from_secs(10))
             .send()
@@ -311,8 +355,8 @@ impl SafetyChecker {
 
     /// Get holder count using RPC getProgramAccounts (fallback)
     async fn get_holders_rpc(&self, mint: &Pubkey) -> Result<u32> {
-        use solana_client::rpc_config::{RpcProgramAccountsConfig, RpcAccountInfoConfig};
-        use solana_client::rpc_filter::{RpcFilterType, Memcmp};
+        use solana_client::rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
+        use solana_client::rpc_filter::{Memcmp, RpcFilterType};
         use spl_token::state::Account as TokenAccount;
 
         debug!("🔍 Using RPC fallback for holder count");
@@ -330,7 +374,8 @@ impl SafetyChecker {
             ..Default::default()
         };
 
-        let accounts = self.rpc_client
+        let accounts = self
+            .rpc_client
             .get_program_accounts_with_config(&spl_token::id(), config)
             .await?;
 
@@ -360,17 +405,20 @@ impl SafetyChecker {
         }
 
         // Calculate total supply
-        let mint_account = self.rpc_client
+        let mint_account = self
+            .rpc_client
             .get_account_with_config(
                 &token.mint,
                 RpcAccountInfoConfig {
                     encoding: Some(UiAccountEncoding::Base64),
                     ..Default::default()
-                }
+                },
             )
             .await?;
 
-        let account = mint_account.value.ok_or_else(|| anyhow!("Mint account not found"))?;
+        let account = mint_account
+            .value
+            .ok_or_else(|| anyhow!("Mint account not found"))?;
         let mint_data = Mint::unpack(&account.data)?;
         let total_supply = mint_data.supply;
 
@@ -383,7 +431,11 @@ impl SafetyChecker {
         // Additional heuristics for dev detection:
         // 1. If top holder has >50% = likely dev
         // 2. If top 3 holders combined have >80% = likely dev team
-        let top3_combined = top_holders.iter().take(3).map(|(_, balance)| *balance).sum::<u64>();
+        let top3_combined = top_holders
+            .iter()
+            .take(3)
+            .map(|(_, balance)| *balance)
+            .sum::<u64>();
         let top3_percentage = (top3_combined as f64 / total_supply as f64) * 100.0;
 
         let dev_percentage = if max_percentage > 50.0 {
@@ -400,8 +452,8 @@ impl SafetyChecker {
 
     /// Get top token holders with their balances
     async fn get_top_holders(&self, mint: &Pubkey, limit: usize) -> Result<Vec<(Pubkey, u64)>> {
-        use solana_client::rpc_config::{RpcProgramAccountsConfig, RpcAccountInfoConfig};
-        use solana_client::rpc_filter::{RpcFilterType, Memcmp};
+        use solana_client::rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
+        use solana_client::rpc_filter::{Memcmp, RpcFilterType};
         use spl_token::state::Account as TokenAccount;
 
         let config = RpcProgramAccountsConfig {
@@ -416,7 +468,8 @@ impl SafetyChecker {
             ..Default::default()
         };
 
-        let accounts = self.rpc_client
+        let accounts = self
+            .rpc_client
             .get_program_accounts_with_config(&spl_token::id(), config)
             .await?;
 
@@ -460,7 +513,8 @@ impl SafetyChecker {
     /// Get token age from mint account creation slot
     async fn get_token_age_from_mint(&self, mint: &Pubkey) -> Result<u32> {
         // Get account info with context (includes slot)
-        let account_info = self.rpc_client
+        let account_info = self
+            .rpc_client
             .get_account_with_commitment(mint, CommitmentConfig::confirmed())
             .await?;
 
@@ -474,7 +528,10 @@ impl SafetyChecker {
             let age_seconds = (slot_diff as f64 / 2.5) as u32;
             let age_minutes = age_seconds / 60;
 
-            debug!("📅 Token age from mint: {} minutes (slot diff: {})", age_minutes, slot_diff);
+            debug!(
+                "📅 Token age from mint: {} minutes (slot diff: {})",
+                age_minutes, slot_diff
+            );
             Ok(age_minutes)
         } else {
             Err(anyhow!("Mint account not found"))
@@ -498,35 +555,48 @@ impl SafetyChecker {
             120 // Older token, assume 2 hours
         };
 
-        debug!("📅 Token age from pool heuristic: {} minutes", estimated_age);
+        debug!(
+            "📅 Token age from pool heuristic: {} minutes",
+            estimated_age
+        );
         Ok(estimated_age)
     }
-    
+
     fn has_suspicious_keywords(&self, token: &NewToken) -> bool {
-        let text = format!("{} {}", token.name.to_lowercase(), token.symbol.to_lowercase());
-        
+        let text = format!(
+            "{} {}",
+            token.name.to_lowercase(),
+            token.symbol.to_lowercase()
+        );
+
         for keyword in &self.blacklisted_keywords {
             if text.contains(keyword) {
-                warn!("Suspicious keyword '{}' found in token: {}", keyword, token.mint);
+                warn!(
+                    "Suspicious keyword '{}' found in token: {}",
+                    keyword, token.mint
+                );
                 return true;
             }
         }
-        
+
         false
     }
-    
+
     async fn check_honeypot_api(&self, mint: &Pubkey) -> Result<bool> {
         // Użyj URL z config lub fallback na domyślny
-        let base_url = self.config.honeypot_api.as_ref()
+        let base_url = self
+            .config
+            .honeypot_api
+            .as_ref()
             .map(|s| s.as_str())
             .unwrap_or("https://api.honeypot.is/v2/IsHoneypot");
         let url = format!("{}?address={}", base_url, mint);
-        
+
         match self.http_client.get(&url).send().await {
             Ok(response) => {
                 if response.status().is_success() {
                     let data: serde_json::Value = response.json().await?;
-                    
+
                     if let Some(is_honeypot) = data.get("IsHoneypot").and_then(|v| v.as_bool()) {
                         return Ok(is_honeypot);
                     }
@@ -536,14 +606,17 @@ impl SafetyChecker {
                 debug!("Honeypot API error: {}", e);
             }
         }
-        
+
         // Default to safe if API fails
         Ok(false)
     }
-    
+
     async fn check_token_taxes(&self, mint: &Pubkey) -> Result<(f64, f64)> {
         // Użyj URL z config lub fallback na domyślny
-        let base_url = self.config.rugcheck_api.as_ref()
+        let base_url = self
+            .config
+            .rugcheck_api
+            .as_ref()
             .map(|s| s.as_str())
             .unwrap_or("https://api.rugcheck.xyz/v1/tokens");
         let url = format!("{}/{}", base_url, mint);
@@ -558,11 +631,11 @@ impl SafetyChecker {
         }
         Ok((0.0, 0.0))
     }
-    
+
     pub fn add_blacklisted_creator(&mut self, creator: Pubkey) {
         self.blacklisted_creators.insert(creator);
     }
-    
+
     pub fn add_blacklisted_keyword(&mut self, keyword: String) {
         self.blacklisted_keywords.insert(keyword.to_lowercase());
     }
@@ -586,10 +659,18 @@ impl SafetyChecker {
     }
 
     /// Get enhanced token data from Helius API
-    async fn get_enhanced_token_data(&self, mint: &Pubkey, api_key: &str) -> Result<EnhancedTokenData> {
-        let url = format!("https://api.helius.xyz/v0/tokens/{}/metadata?api-key={}", mint, api_key);
+    async fn get_enhanced_token_data(
+        &self,
+        mint: &Pubkey,
+        api_key: &str,
+    ) -> Result<EnhancedTokenData> {
+        let url = format!(
+            "https://api.helius.xyz/v0/tokens/{}/metadata?api-key={}",
+            mint, api_key
+        );
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&url)
             .timeout(std::time::Duration::from_secs(10))
             .send()
@@ -626,8 +707,10 @@ impl SafetyChecker {
             data.is_mutable = mutable;
         }
 
-        debug!("📊 Enhanced data: verified={}, frozen={}, mutable={}",
-               data.is_verified, data.is_frozen, data.is_mutable);
+        debug!(
+            "📊 Enhanced data: verified={}, frozen={}, mutable={}",
+            data.is_verified, data.is_frozen, data.is_mutable
+        );
 
         Ok(data)
     }
@@ -648,10 +731,18 @@ impl SafetyChecker {
     }
 
     /// Analyze transaction patterns for suspicious activity
-    async fn analyze_transaction_patterns(&self, mint: &Pubkey, api_key: &str) -> Result<Vec<String>> {
-        let url = format!("https://api.helius.xyz/v0/tokens/{}/transactions?api-key={}", mint, api_key);
+    async fn analyze_transaction_patterns(
+        &self,
+        mint: &Pubkey,
+        api_key: &str,
+    ) -> Result<Vec<String>> {
+        let url = format!(
+            "https://api.helius.xyz/v0/tokens/{}/transactions?api-key={}",
+            mint, api_key
+        );
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&url)
             .timeout(std::time::Duration::from_secs(15))
             .send()
@@ -672,7 +763,8 @@ impl SafetyChecker {
 
             for tx in transactions {
                 if let Some(amount) = tx.get("amount").and_then(|v| v.as_f64()) {
-                    if amount > 1000000.0 { // Large transfer
+                    if amount > 1000000.0 {
+                        // Large transfer
                         large_transfers += 1;
                     }
                 }
@@ -717,10 +809,18 @@ impl SafetyChecker {
     }
 
     /// Fetch real-time metrics from Helius API
-    async fn fetch_realtime_metrics(&self, mint: &Pubkey, api_key: &str) -> Result<RealTimeMetrics> {
-        let url = format!("https://api.helius.xyz/v0/tokens/{}/metrics?api-key={}", mint, api_key);
+    async fn fetch_realtime_metrics(
+        &self,
+        mint: &Pubkey,
+        api_key: &str,
+    ) -> Result<RealTimeMetrics> {
+        let url = format!(
+            "https://api.helius.xyz/v0/tokens/{}/metrics?api-key={}",
+            mint, api_key
+        );
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&url)
             .timeout(std::time::Duration::from_secs(10))
             .send()
@@ -750,8 +850,10 @@ impl SafetyChecker {
             metrics.market_cap = market_cap;
         }
 
-        debug!("📊 Real-time metrics: price=${:.8}, volume=${:.0}, holders={}, mcap=${:.0}",
-               metrics.current_price, metrics.volume_24h, metrics.holder_count, metrics.market_cap);
+        debug!(
+            "📊 Real-time metrics: price=${:.8}, volume=${:.0}, holders={}, mcap=${:.0}",
+            metrics.current_price, metrics.volume_24h, metrics.holder_count, metrics.market_cap
+        );
 
         Ok(metrics)
     }

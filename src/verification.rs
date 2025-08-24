@@ -1,13 +1,10 @@
 //! On-chain transaction verification module
 //! Verifies arbitrage transactions after execution
 
-use anyhow::{Result, anyhow};
-use log::{info, warn, debug};
+use anyhow::{anyhow, Result};
+use log::{debug, info, warn};
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{
-    signature::Signature,
-    commitment_config::CommitmentConfig,
-};
+use solana_sdk::{commitment_config::CommitmentConfig, signature::Signature};
 use solana_transaction_status::TransactionConfirmationStatus;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -58,10 +55,7 @@ pub struct TransactionVerifier {
 
 impl TransactionVerifier {
     pub fn new(rpc_client: Arc<RpcClient>, config: VerificationConfig) -> Self {
-        Self {
-            rpc_client,
-            config,
-        }
+        Self { rpc_client, config }
     }
 
     /// Verify transaction confirmation on-chain
@@ -76,14 +70,17 @@ impl TransactionVerifier {
             match self.check_transaction_status(&signature).await {
                 Ok(Some(result)) => {
                     let verification_time = start_time.elapsed().as_millis() as u64;
-                    info!("✅ Transaction verified in {}ms: {}", verification_time, signature);
+                    info!(
+                        "✅ Transaction verified in {}ms: {}",
+                        verification_time, signature
+                    );
                     return Ok(match result {
                         (slot, confirmations) => VerificationResult::Confirmed {
                             signature,
                             slot,
                             confirmations,
                             verification_time_ms: verification_time,
-                        }
+                        },
                     });
                 }
                 Ok(None) => {
@@ -112,17 +109,22 @@ impl TransactionVerifier {
     }
 
     /// Check transaction status and confirmations
-    async fn check_transaction_status(&self, signature: &Signature) -> Result<Option<(u64, usize)>> {
+    async fn check_transaction_status(
+        &self,
+        signature: &Signature,
+    ) -> Result<Option<(u64, usize)>> {
         // Try to get transaction directly - if it exists, it's confirmed
-        match self.rpc_client
+        match self
+            .rpc_client
             .get_transaction_with_config(
                 signature,
                 solana_client::rpc_config::RpcTransactionConfig {
                     encoding: Some(solana_transaction_status::UiTransactionEncoding::Json),
                     commitment: Some(CommitmentConfig::confirmed()),
                     max_supported_transaction_version: Some(0),
-                }
-            ).await
+                },
+            )
+            .await
         {
             Ok(transaction) => {
                 debug!("✅ Transaction {} confirmed", signature);
@@ -139,22 +141,27 @@ impl TransactionVerifier {
     }
 
     /// Verify arbitrage transaction details
-    pub async fn verify_arbitrage_details(&self, signature: Signature) -> Result<ArbitrageVerification> {
+    pub async fn verify_arbitrage_details(
+        &self,
+        signature: Signature,
+    ) -> Result<ArbitrageVerification> {
         if !self.config.enable_detailed_verification {
             return Ok(ArbitrageVerification::Skipped);
         }
 
         info!("🔍 Verifying arbitrage transaction details: {}", signature);
 
-        let transaction = self.rpc_client
+        let transaction = self
+            .rpc_client
             .get_transaction_with_config(
                 &signature,
                 solana_client::rpc_config::RpcTransactionConfig {
                     encoding: Some(solana_transaction_status::UiTransactionEncoding::Json),
                     commitment: Some(CommitmentConfig::confirmed()),
                     max_supported_transaction_version: Some(0),
-                }
-            ).await?;
+                },
+            )
+            .await?;
 
         // Analyze transaction logs for arbitrage success
         if let Some(meta) = transaction.transaction.meta {
@@ -226,7 +233,7 @@ mod tests {
         let rpc_client = Arc::new(RpcClient::new("https://api.devnet.solana.com".to_string()));
         let config = VerificationConfig::default();
         let verifier = TransactionVerifier::new(rpc_client, config);
-        
+
         // Test that verifier is created successfully
         assert_eq!(verifier.config.max_confirmation_time_seconds, 30);
     }

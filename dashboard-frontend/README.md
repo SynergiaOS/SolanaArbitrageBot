@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🚀 Enhanced Solana Arbitrage Bot Dashboard
 
-## Getting Started
+A comprehensive, real-time dashboard for monitoring and controlling the Enhanced Solana Arbitrage Bot with advanced trading components.
 
-First, run the development server:
+## ✨ Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+### 🎯 **Real-time Trading Dashboard**
+- Live arbitrage opportunities display
+- Sniper bot activity monitoring
+- Current positions and P&L tracking
+- Performance metrics (success rate, ROI, Sharpe ratio)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 🧬 **Enhanced Components Monitoring**
+- **Sniper Bot**: Active snipes, rug detection alerts, profit taking status
+- **GEPA Optimizer**: Current generation, fitness scores, parameter evolution
+- **Kestra Workflows**: Active workflows, execution status, scheduling
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 🛡️ **Risk Management Interface**
+- Real-time risk metrics
+- Position sizing controls
+- Stop-loss and take-profit management
+- Daily/weekly loss limits monitoring
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### ⚙️ **Configuration Management**
+- Parameter adjustment interface for all components
+- Feature toggle controls (arbitrage/sniper/GEPA/Kestra)
+- Risk tolerance and capital allocation settings
 
-## Learn More
+### 📊 **Analytics and Reporting**
+- Historical performance charts
+- Trade history with filtering
+- Profit/loss breakdowns by strategy
+- System health and uptime metrics
 
-To learn more about Next.js, take a look at the following resources:
+## 🛠️ Technology Stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Framework**: Next.js 15 with TypeScript
+- **Styling**: Tailwind CSS with custom design system
+- **Charts**: Recharts for data visualization
+- **Real-time**: WebSocket connection to bot API
+- **Icons**: Lucide React
+- **State Management**: React Context API
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🚀 Quick Start
 
-## Deploy on Vercel
+### Prerequisites
+- Node.js 18+
+- Enhanced Solana Arbitrage Bot running on port 8080
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Installation
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+2. **Configure environment**
+   ```bash
+   cp .env.local.example .env.local
+   # Edit .env.local with your configuration
+   ```
+
+3. **Start development server**
+   ```bash
+   npm run dev
+   ```
+
+4. **Open dashboard**
+   ```
+   http://localhost:3000
+   ```

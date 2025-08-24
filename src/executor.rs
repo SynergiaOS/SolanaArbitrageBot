@@ -1,26 +1,26 @@
 //! Transaction Executor with Jupiter Integration
 //! Optimized for high-frequency arbitrage execution with async operations and retry logic
 
-use anyhow::{Result, anyhow, Context};
-use log::{info, warn, error, debug};
-use solana_client::nonblocking::rpc_client::RpcClient; // Changed to nonblocking
+use crate::calculator::ArbitrageOpportunity;
 use crate::utils::conversions::*;
+use anyhow::{anyhow, Context, Result};
+use base64::Engine;
+use log::{debug, error, info, warn};
+use serde::{Deserialize, Serialize};
+use solana_client::nonblocking::rpc_client::RpcClient; // Changed to nonblocking
 use solana_sdk::{
+    commitment_config::CommitmentConfig,
+    compute_budget::ComputeBudgetInstruction,
+    message::Message,
+    pubkey::Pubkey,
     signature::{Keypair, Signature, Signer},
     transaction::Transaction,
-    pubkey::Pubkey,
-    commitment_config::CommitmentConfig,
-    message::Message,
-    compute_budget::ComputeBudgetInstruction,
 };
-use solana_transaction_status::UiTransactionEncoding;
-use base64::Engine;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
-use serde::{Deserialize, Serialize};
+use solana_transaction_status::UiTransactionEncoding;
 use std::str::FromStr;
-use crate::calculator::ArbitrageOpportunity;
-use tokio::time::{sleep, Duration, Instant};
 use std::sync::Arc;
+use tokio::time::{sleep, Duration, Instant};
 
 // Token mint addresses
 const SOL_MINT: &str = "So11111111111111111111111111111111111111112";
@@ -146,7 +146,10 @@ impl TransactionExecutor {
 
         info!("💳 Wallet loaded: {}", pubkey);
         info!("🌐 RPC endpoint: {}", config.rpc.url);
-        info!("🏃 Mode: {}", if dry_run { "DRY RUN" } else { "LIVE TRADING" });
+        info!(
+            "🏃 Mode: {}",
+            if dry_run { "DRY RUN" } else { "LIVE TRADING" }
+        );
 
         // Create optimized HTTP client
         let http_client = reqwest::Client::builder()
@@ -171,9 +174,15 @@ impl TransactionExecutor {
 
     /// Get performance statistics
     pub fn get_performance_stats(&self) -> (u64, f64, f64) {
-        let executions = self.execution_count.load(std::sync::atomic::Ordering::Relaxed);
-        let total_time = self.total_execution_time_ms.load(std::sync::atomic::Ordering::Relaxed);
-        let successes = self.success_count.load(std::sync::atomic::Ordering::Relaxed);
+        let executions = self
+            .execution_count
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let total_time = self
+            .total_execution_time_ms
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let successes = self
+            .success_count
+            .load(std::sync::atomic::Ordering::Relaxed);
 
         let avg_time_ms = if executions > 0 {
             total_time as f64 / executions as f64
@@ -189,14 +198,15 @@ impl TransactionExecutor {
 
         (executions, avg_time_ms, success_rate)
     }
-    
+
     fn setup_keypair_wallet(path: &str) -> Result<WalletType> {
         // Try reading as JSON array first
         let wallet_str = std::fs::read_to_string(path)
             .map_err(|e| anyhow!("Failed to read wallet from {}: {}", path, e))?;
-        
+
         // Try parsing as JSON array
-        let wallet_bytes: Vec<u8> = if let Ok(bytes) = serde_json::from_str::<Vec<u8>>(&wallet_str) {
+        let wallet_bytes: Vec<u8> = if let Ok(bytes) = serde_json::from_str::<Vec<u8>>(&wallet_str)
+        {
             bytes
         } else if let Ok(bytes) = serde_json::from_str::<Vec<i8>>(&wallet_str) {
             // Handle signed bytes (convert i8 to u8)
@@ -205,20 +215,24 @@ impl TransactionExecutor {
             // Try base58 or other formats
             return Err(anyhow!("Invalid wallet format in {}", path));
         };
-        
+
         if wallet_bytes.len() != 64 {
-            return Err(anyhow!("Invalid wallet size: expected 64 bytes, got {}", wallet_bytes.len()));
+            return Err(anyhow!(
+                "Invalid wallet size: expected 64 bytes, got {}",
+                wallet_bytes.len()
+            ));
         }
-        
+
         let wallet = Keypair::try_from(&wallet_bytes[..])
             .map_err(|e| anyhow!("Invalid wallet format: {}", e))?;
-        
+
         Ok(WalletType::Keypair(wallet))
     }
-    
+
     pub async fn execute_arbitrage(&self, opportunity: &ArbitrageOpportunity) -> Result<Signature> {
         let start_time = Instant::now();
-        self.execution_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.execution_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         info!(
             "🔨 Executing arbitrage: {} SOL {} -> {} (expected profit: ${:.2})",
@@ -230,8 +244,12 @@ impl TransactionExecutor {
 
         // In dry run mode, just simulate
         if self.dry_run {
-            warn!("🏃 DRY RUN - Would execute trade for ${:.2} profit", opportunity.expected_profit_usd);
-            self.success_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            warn!(
+                "🏃 DRY RUN - Would execute trade for ${:.2} profit",
+                opportunity.expected_profit_usd
+            );
+            self.success_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             return Ok(Signature::default());
         }
 
@@ -239,16 +257,21 @@ impl TransactionExecutor {
 
         // Update performance metrics
         let execution_time = start_time.elapsed().as_millis() as u64;
-        self.total_execution_time_ms.fetch_add(execution_time, std::sync::atomic::Ordering::Relaxed);
+        self.total_execution_time_ms
+            .fetch_add(execution_time, std::sync::atomic::Ordering::Relaxed);
 
         if result.is_ok() {
-            self.success_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            self.success_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
 
         result
     }
 
-    async fn execute_arbitrage_with_retry(&self, opportunity: &ArbitrageOpportunity) -> Result<Signature> {
+    async fn execute_arbitrage_with_retry(
+        &self,
+        opportunity: &ArbitrageOpportunity,
+    ) -> Result<Signature> {
         let max_retries = 2; // Reduced retries for speed
         let mut last_error = None;
 
@@ -258,20 +281,30 @@ impl TransactionExecutor {
             match self.execute_arbitrage_attempt(opportunity).await {
                 Ok(signature) => {
                     if attempt > 1 {
-                        info!("✅ Arbitrage succeeded on attempt {}/{} in {:?}",
-                              attempt, max_retries, attempt_start.elapsed());
+                        info!(
+                            "✅ Arbitrage succeeded on attempt {}/{} in {:?}",
+                            attempt,
+                            max_retries,
+                            attempt_start.elapsed()
+                        );
                     }
                     return Ok(signature);
                 }
                 Err(e) => {
                     let error_msg = e.to_string();
-                    warn!("❌ Attempt {}/{} failed in {:?}: {}",
-                          attempt, max_retries, attempt_start.elapsed(), error_msg);
+                    warn!(
+                        "❌ Attempt {}/{} failed in {:?}: {}",
+                        attempt,
+                        max_retries,
+                        attempt_start.elapsed(),
+                        error_msg
+                    );
 
                     // Smart retry logic - don't retry certain errors
-                    if error_msg.contains("insufficient funds") ||
-                       error_msg.contains("slippage") ||
-                       error_msg.contains("price impact") {
+                    if error_msg.contains("insufficient funds")
+                        || error_msg.contains("slippage")
+                        || error_msg.contains("price impact")
+                    {
                         return Err(e); // Don't retry these errors
                     }
 
@@ -289,7 +322,10 @@ impl TransactionExecutor {
         Err(last_error.unwrap_or_else(|| anyhow!("All retry attempts failed")))
     }
 
-    async fn execute_arbitrage_attempt(&self, opportunity: &ArbitrageOpportunity) -> Result<Signature> {
+    async fn execute_arbitrage_attempt(
+        &self,
+        opportunity: &ArbitrageOpportunity,
+    ) -> Result<Signature> {
         let start_time = Instant::now();
 
         // Parallel execution: Get quote and fresh blockhash simultaneously
@@ -304,7 +340,9 @@ impl TransactionExecutor {
         debug!("⚡ Quote + blockhash fetched in {:?}", start_time.elapsed());
 
         // Build swap transaction using Jupiter (optimized)
-        let transaction = self.build_jupiter_swap_transaction_fast(quote, recent_blockhash).await?;
+        let transaction = self
+            .build_jupiter_swap_transaction_fast(quote, recent_blockhash)
+            .await?;
 
         // Fast simulation if required
         if self.simulation_required {
@@ -314,7 +352,11 @@ impl TransactionExecutor {
         // Execute transaction with optimized settings
         info!("📤 Sending transaction...");
         let signature = self.send_transaction_fast(&transaction).await?;
-        info!("✅ Transaction confirmed: {} in {:?}", signature, start_time.elapsed());
+        info!(
+            "✅ Transaction confirmed: {} in {:?}",
+            signature,
+            start_time.elapsed()
+        );
 
         Ok(signature)
     }
@@ -336,8 +378,10 @@ impl TransactionExecutor {
         // Simulate with timeout
         let result = tokio::time::timeout(
             Duration::from_millis(2000), // Fast timeout
-            self.rpc_client.simulate_transaction_with_config(transaction, config)
-        ).await
+            self.rpc_client
+                .simulate_transaction_with_config(transaction, config),
+        )
+        .await
         .context("Simulation timeout")?
         .context("Simulation RPC error")?;
 
@@ -345,15 +389,24 @@ impl TransactionExecutor {
             return Err(anyhow!("Transaction simulation failed: {:?}", err));
         }
 
-        debug!("✅ Fast simulation passed - Units: {:?}", result.value.units_consumed);
+        debug!(
+            "✅ Fast simulation passed - Units: {:?}",
+            result.value.units_consumed
+        );
         Ok(())
     }
-    
-    async fn get_jupiter_quote_for_arbitrage(&self, opportunity: &ArbitrageOpportunity) -> Result<JupiterQuoteResponse> {
+
+    async fn get_jupiter_quote_for_arbitrage(
+        &self,
+        opportunity: &ArbitrageOpportunity,
+    ) -> Result<JupiterQuoteResponse> {
         // Convert SOL amount to lamports
         let amount_lamports = (opportunity.amount_sol * 1_000_000_000.0) as u64;
 
-        debug!("📊 Getting Jupiter quote for {} SOL -> USDC", opportunity.amount_sol);
+        debug!(
+            "📊 Getting Jupiter quote for {} SOL -> USDC",
+            opportunity.amount_sol
+        );
 
         let quote_url = format!(
             "https://quote-api.jup.ag/v6/quote?inputMint={}&outputMint={}&amount={}&slippageBps={}&onlyDirectRoutes=true&maxAccounts=20",
@@ -361,7 +414,8 @@ impl TransactionExecutor {
         );
 
         // Optimized HTTP request with aggressive timeouts
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&quote_url)
             .timeout(Duration::from_millis(2000)) // Very fast timeout for arbitrage
             .send()
@@ -373,12 +427,16 @@ impl TransactionExecutor {
             return Err(anyhow!("Jupiter quote failed: {}", error_text));
         }
 
-        let quote: JupiterQuoteResponse = response.json()
+        let quote: JupiterQuoteResponse = response
+            .json()
             .await
             .context("Failed to parse Jupiter quote")?;
 
-        debug!("📈 Jupiter route: {} -> {}",
-            quote.route_plan.iter()
+        debug!(
+            "📈 Jupiter route: {} -> {}",
+            quote
+                .route_plan
+                .iter()
                 .map(|s| s.swap_info.label.clone())
                 .collect::<Vec<_>>()
                 .join(" -> "),
@@ -387,13 +445,16 @@ impl TransactionExecutor {
 
         Ok(quote)
     }
-    
-    async fn build_jupiter_swap_transaction(&self, quote: JupiterQuoteResponse) -> Result<Transaction> {
+
+    async fn build_jupiter_swap_transaction(
+        &self,
+        quote: JupiterQuoteResponse,
+    ) -> Result<Transaction> {
         let payer = match &self.wallet {
             WalletType::Keypair(kp) => kp.pubkey(),
             WalletType::Ledger(_) => return Err(anyhow!("Ledger not yet implemented")),
         };
-        
+
         // Build swap request
         let swap_request = JupiterSwapRequest {
             user_public_key: payer.to_string(),
@@ -409,33 +470,36 @@ impl TransactionExecutor {
                 max_bps: self.slippage_bps,
             }),
         };
-        
+
         // Get swap transaction from Jupiter with timeout
-        let response = self.http_client.post("https://quote-api.jup.ag/v6/swap")
+        let response = self
+            .http_client
+            .post("https://quote-api.jup.ag/v6/swap")
             .json(&swap_request)
             .timeout(Duration::from_secs(8)) // Fast timeout for arbitrage
             .send()
             .await
             .context("Failed to get swap transaction")?;
-        
+
         if !response.status().is_success() {
             let error_text = response.text().await?;
             return Err(anyhow!("Jupiter swap failed: {}", error_text));
         }
-        
-        let swap_response: JupiterSwapResponse = response.json()
+
+        let swap_response: JupiterSwapResponse = response
+            .json()
             .await
             .context("Failed to parse swap response")?;
-        
+
         // Deserialize the transaction
         use base64::{engine::general_purpose, Engine as _};
         let tx_bytes = general_purpose::STANDARD
             .decode(&swap_response.swap_transaction)
             .context("Failed to decode transaction")?;
 
-        let mut transaction: Transaction = bincode::deserialize(&tx_bytes)
-            .context("Failed to deserialize transaction")?;
-        
+        let mut transaction: Transaction =
+            bincode::deserialize(&tx_bytes).context("Failed to deserialize transaction")?;
+
         // Sign the transaction
         match &self.wallet {
             WalletType::Keypair(kp) => {
@@ -446,7 +510,7 @@ impl TransactionExecutor {
                 return Err(anyhow!("Ledger signing not yet implemented"));
             }
         }
-        
+
         Ok(transaction)
     }
 
@@ -454,7 +518,7 @@ impl TransactionExecutor {
     async fn build_jupiter_swap_transaction_fast(
         &self,
         quote: JupiterQuoteResponse,
-        recent_blockhash: solana_sdk::hash::Hash
+        recent_blockhash: solana_sdk::hash::Hash,
     ) -> Result<Transaction> {
         let payer = match &self.wallet {
             WalletType::Keypair(kp) => kp.pubkey(),
@@ -472,7 +536,7 @@ impl TransactionExecutor {
             compute_unit_price_micro_lamports: Some(self.priority_fee * 1000),
             priority_level: Some("veryHigh".to_string()), // Highest priority
             dynamic_slippage: Some(DynamicSlippage {
-                min_bps: 5,  // Tighter slippage for speed
+                min_bps: 5, // Tighter slippage for speed
                 max_bps: self.slippage_bps,
             }),
         };
@@ -480,7 +544,8 @@ impl TransactionExecutor {
         debug!("🔨 Building Jupiter swap transaction");
 
         // Fast HTTP request to Jupiter swap API
-        let response = self.http_client
+        let response = self
+            .http_client
             .post("https://quote-api.jup.ag/v6/swap")
             .json(&swap_request)
             .timeout(Duration::from_millis(3000)) // Fast timeout
@@ -498,8 +563,8 @@ impl TransactionExecutor {
             .decode(&swap_response.swap_transaction)
             .context("Failed to decode swap transaction")?;
 
-        let mut transaction: Transaction = bincode::deserialize(&tx_bytes)
-            .context("Failed to deserialize transaction")?;
+        let mut transaction: Transaction =
+            bincode::deserialize(&tx_bytes).context("Failed to deserialize transaction")?;
 
         // Sign with pre-fetched blockhash
         match &self.wallet {
@@ -526,7 +591,8 @@ impl TransactionExecutor {
         };
 
         // Send transaction
-        let signature = self.rpc_client
+        let signature = self
+            .rpc_client
             .send_transaction_with_config(transaction, config)
             .await?;
 
@@ -552,33 +618,34 @@ impl TransactionExecutor {
 
         Err(anyhow!("Transaction confirmation timeout"))
     }
-    
+
     // Fallback method: Build custom swap instructions (without Jupiter)
-    pub async fn execute_direct_swap(&self, opportunity: &ArbitrageOpportunity) -> Result<Signature> {
+    pub async fn execute_direct_swap(
+        &self,
+        opportunity: &ArbitrageOpportunity,
+    ) -> Result<Signature> {
         info!("🔄 Executing direct DEX swap (fallback method)");
-        
+
         let payer = match &self.wallet {
             WalletType::Keypair(kp) => kp.pubkey(),
             WalletType::Ledger(_) => return Err(anyhow!("Ledger not yet implemented")),
         };
-        
+
         // Build instructions
         let mut instructions = vec![];
-        
+
         // Add compute budget instruction
-        instructions.push(
-            ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee)
-        );
-        
+        instructions.push(ComputeBudgetInstruction::set_compute_unit_price(
+            self.priority_fee,
+        ));
+
         // Add compute unit limit
-        instructions.push(
-            ComputeBudgetInstruction::set_compute_unit_limit(300_000)
-        );
-        
+        instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(300_000));
+
         // Note: Real swap instructions would go here
         // This requires integration with Raydium/Orca SDKs
         // For now, this is a placeholder
-        
+
         if instructions.len() == 2 {
             warn!("Direct swap not fully implemented - would need Raydium/Orca SDK integration");
             if self.dry_run {
@@ -587,36 +654,35 @@ impl TransactionExecutor {
                 return Err(anyhow!("Direct swap not yet implemented"));
             }
         }
-        
+
         // Get recent blockhash
         let recent_blockhash = self.rpc_client.get_latest_blockhash().await?;
-        
+
         // Create message
-        let message = Message::new_with_blockhash(
-            &instructions,
-            Some(&payer),
-            &recent_blockhash,
-        );
-        
+        let message = Message::new_with_blockhash(&instructions, Some(&payer), &recent_blockhash);
+
         // Sign transaction
         let transaction = match &self.wallet {
-            WalletType::Keypair(kp) => {
-                Transaction::new(&[kp], message, recent_blockhash)
-            }
+            WalletType::Keypair(kp) => Transaction::new(&[kp], message, recent_blockhash),
             WalletType::Ledger(_) => {
                 return Err(anyhow!("Ledger signing not yet implemented"));
             }
         };
-        
+
         // Send transaction
-        let signature = self.rpc_client.send_and_confirm_transaction(&transaction).await?;
+        let signature = self
+            .rpc_client
+            .send_and_confirm_transaction(&transaction)
+            .await?;
         Ok(signature)
     }
 
     pub async fn verify_transaction(&self, signature: &Signature) -> Result<f64> {
         let wallet_pubkey = match &self.wallet {
             WalletType::Keypair(kp) => kp.pubkey(),
-            WalletType::Ledger(_) => return Err(anyhow!("Ledger not yet implemented for verification")),
+            WalletType::Ledger(_) => {
+                return Err(anyhow!("Ledger not yet implemented for verification"))
+            }
         };
 
         let mut attempts = 0;
@@ -626,16 +692,26 @@ impl TransactionExecutor {
 
         loop {
             if attempts >= max_attempts {
-                return Err(anyhow!("Transaction verification timed out for signature {}", signature));
+                return Err(anyhow!(
+                    "Transaction verification timed out for signature {}",
+                    signature
+                ));
             }
             attempts += 1;
 
-            match self.rpc_client.get_transaction(signature, UiTransactionEncoding::JsonParsed).await {
+            match self
+                .rpc_client
+                .get_transaction(signature, UiTransactionEncoding::JsonParsed)
+                .await
+            {
                 Ok(tx) => {
                     return self.parse_transaction_profit(tx, &wallet_pubkey, signature);
-                },
+                }
                 Err(e) => {
-                    debug!("Attempt {} to fetch transaction {}: {}. Retrying...", attempts, signature, e);
+                    debug!(
+                        "Attempt {} to fetch transaction {}: {}. Retrying...",
+                        attempts, signature, e
+                    );
                     sleep(Duration::from_millis(1000)).await;
                 }
             }
@@ -648,7 +724,10 @@ impl TransactionExecutor {
         wallet_pubkey: &Pubkey,
         signature: &Signature,
     ) -> Result<f64> {
-        let meta = tx.transaction.meta.ok_or_else(|| anyhow!("Transaction metadata not found for signature {}", signature))?;
+        let meta = tx
+            .transaction
+            .meta
+            .ok_or_else(|| anyhow!("Transaction metadata not found for signature {}", signature))?;
 
         if let Some(err) = meta.err {
             error!("❌ Transaction {} failed on-chain: {:?}", signature, err);
@@ -663,18 +742,22 @@ impl TransactionExecutor {
         let pre_balances = meta.pre_token_balances.unwrap_or(vec![]);
         let post_balances = meta.post_token_balances.unwrap_or(vec![]);
 
-        let pre_usdc_balance = pre_balances.iter()
-            .find(|balance|
-                balance.owner.as_ref().map_or(false, |owner| Pubkey::from_str(owner).unwrap_or_default() == *wallet_pubkey) &&
-                balance.mint == usdc_mint_pubkey.to_string()
-            )
+        let pre_usdc_balance = pre_balances
+            .iter()
+            .find(|balance| {
+                balance.owner.as_ref().map_or(false, |owner| {
+                    Pubkey::from_str(owner).unwrap_or_default() == *wallet_pubkey
+                }) && balance.mint == usdc_mint_pubkey.to_string()
+            })
             .and_then(|balance| balance.ui_token_amount.amount.parse::<u64>().ok());
 
-        let post_usdc_balance = post_balances.iter()
-            .find(|balance|
-                balance.owner.as_ref().map_or(false, |owner| Pubkey::from_str(owner).unwrap_or_default() == *wallet_pubkey) &&
-                balance.mint == usdc_mint_pubkey.to_string()
-            )
+        let post_usdc_balance = post_balances
+            .iter()
+            .find(|balance| {
+                balance.owner.as_ref().map_or(false, |owner| {
+                    Pubkey::from_str(owner).unwrap_or_default() == *wallet_pubkey
+                }) && balance.mint == usdc_mint_pubkey.to_string()
+            })
             .and_then(|balance| balance.ui_token_amount.amount.parse::<u64>().ok());
 
         match (pre_usdc_balance, post_usdc_balance) {

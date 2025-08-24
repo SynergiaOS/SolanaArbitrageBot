@@ -1,10 +1,10 @@
 //! Performance Benchmark for Solana Arbitrage Bot
 //! Tests calculator performance improvements
 
-use std::time::Instant;
-use solana_arbitrage_bot::calculator::ProfitCalculator;
-use solana_arbitrage_bot::{Config, LimitsConfig, ExecutionConfig};
 use rust_decimal::Decimal;
+use solana_arbitrage_bot::calculator::ProfitCalculator;
+use solana_arbitrage_bot::{Config, ExecutionConfig, LimitsConfig};
+use std::time::Instant;
 
 fn create_test_config() -> Config {
     Config {
@@ -48,10 +48,10 @@ fn create_test_config() -> Config {
 fn benchmark_calculator_performance() {
     println!("🔥 Benchmarking Calculator Performance");
     println!("=====================================");
-    
+
     let config = create_test_config();
     let mut calculator = ProfitCalculator::new(&config);
-    
+
     // Test data - realistic price scenarios
     let test_scenarios = vec![
         (100.0, 100.5, "Small spread"),
@@ -61,35 +61,33 @@ fn benchmark_calculator_performance() {
         (100.0, 99.0, "Reverse medium"),
         (100.0, 98.0, "Reverse large"),
     ];
-    
+
     let iterations = 10000;
-    
+
     for (raydium_price, orca_price, description) in test_scenarios {
         println!("\n📊 Testing: {}", description);
-        
+
         let start = Instant::now();
         let mut opportunities_found = 0;
-        
+
         for _ in 0..iterations {
-            if let Some(_opportunity) = calculator.calculate_opportunity(
-                raydium_price,
-                orca_price,
-                10.0,
-            ) {
+            if let Some(_opportunity) =
+                calculator.calculate_opportunity(raydium_price, orca_price, 10.0)
+            {
                 opportunities_found += 1;
             }
         }
-        
+
         let duration = start.elapsed();
         let avg_time_ns = duration.as_nanos() / iterations as u128;
         let ops_per_sec = 1_000_000_000.0 / avg_time_ns as f64;
-        
+
         println!("  ⏱️  Total time: {:?}", duration);
         println!("  📈 Avg per calc: {:.2}μs", avg_time_ns as f64 / 1000.0);
         println!("  🚀 Ops/sec: {:.0}", ops_per_sec);
         println!("  ✅ Opportunities: {}/{}", opportunities_found, iterations);
     }
-    
+
     // Get performance stats from calculator
     let (total_calcs, avg_time_ms) = calculator.get_performance_stats();
     println!("\n📊 Calculator Internal Stats:");
@@ -100,31 +98,36 @@ fn benchmark_calculator_performance() {
 fn benchmark_memory_usage() {
     println!("\n🧠 Memory Usage Benchmark");
     println!("=========================");
-    
+
     let config = create_test_config();
     let mut calculator = ProfitCalculator::new(&config);
-    
+
     // Simulate continuous operation
     let iterations = 100000;
     let start = Instant::now();
-    
+
     for i in 0..iterations {
         let price_variation = (i as f64 * 0.001) % 2.0;
         let raydium_price = 100.0 + price_variation;
         let orca_price = 100.0 - price_variation;
-        
+
         let _ = calculator.calculate_opportunity(raydium_price, orca_price, 10.0);
-        
+
         if i % 10000 == 0 {
             let elapsed = start.elapsed();
             let ops_per_sec = i as f64 / elapsed.as_secs_f64();
-            println!("  📊 Progress: {}/{}k - {:.0} ops/sec", i/1000, iterations/1000, ops_per_sec);
+            println!(
+                "  📊 Progress: {}/{}k - {:.0} ops/sec",
+                i / 1000,
+                iterations / 1000,
+                ops_per_sec
+            );
         }
     }
-    
+
     let total_time = start.elapsed();
     let final_ops_per_sec = iterations as f64 / total_time.as_secs_f64();
-    
+
     println!("  ✅ Final throughput: {:.0} ops/sec", final_ops_per_sec);
     println!("  ⏱️  Total time: {:?}", total_time);
 }
@@ -132,49 +135,51 @@ fn benchmark_memory_usage() {
 fn benchmark_concurrent_performance() {
     println!("\n🔄 Concurrent Performance Test");
     println!("==============================");
-    
 
     use std::thread;
-    
+
     let config = create_test_config();
     let num_threads = 4;
     let iterations_per_thread = 25000;
-    
+
     let start = Instant::now();
     let mut handles = vec![];
-    
+
     for thread_id in 0..num_threads {
         let config_clone = config.clone();
-        
+
         let handle = thread::spawn(move || {
             let mut calculator = ProfitCalculator::new(&config_clone);
             let mut opportunities = 0;
-            
+
             for i in 0..iterations_per_thread {
                 let price_offset = (thread_id as f64 + i as f64 * 0.001) % 1.0;
                 let raydium_price = 100.0 + price_offset;
                 let orca_price = 100.0 - price_offset;
-                
-                if calculator.calculate_opportunity(raydium_price, orca_price, 10.0).is_some() {
+
+                if calculator
+                    .calculate_opportunity(raydium_price, orca_price, 10.0)
+                    .is_some()
+                {
                     opportunities += 1;
                 }
             }
-            
+
             opportunities
         });
-        
+
         handles.push(handle);
     }
-    
+
     let mut total_opportunities = 0;
     for handle in handles {
         total_opportunities += handle.join().unwrap();
     }
-    
+
     let total_time = start.elapsed();
     let total_operations = num_threads * iterations_per_thread;
     let ops_per_sec = total_operations as f64 / total_time.as_secs_f64();
-    
+
     println!("  🧵 Threads: {}", num_threads);
     println!("  🔢 Total ops: {}", total_operations);
     println!("  ✅ Opportunities: {}", total_opportunities);
@@ -185,11 +190,11 @@ fn benchmark_concurrent_performance() {
 fn main() {
     println!("🚀 Solana Arbitrage Bot - Performance Benchmark");
     println!("================================================");
-    
+
     benchmark_calculator_performance();
     benchmark_memory_usage();
     benchmark_concurrent_performance();
-    
+
     println!("\n✅ Benchmark completed!");
     println!("\n📋 Summary:");
     println!("- Calculator optimizations implemented");

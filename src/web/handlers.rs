@@ -11,13 +11,8 @@ use rust_decimal::Decimal;
 use serde::Deserialize;
 
 use super::{
-    server::AppState,
-    ApiResponse,
-    BotStatus,
-    BotConfig,
+    database::DailyStats, server::AppState, ApiResponse, BotConfig, BotStatus, TransactionRecord,
     WebSocketMessage,
-    TransactionRecord,
-    database::DailyStats,
 };
 
 /// Query parameters for transactions endpoint
@@ -56,7 +51,11 @@ pub async fn get_bot_status(
 
     let status = BotStatus {
         running: bot_running,
-        mode: if cfg!(debug_assertions) { "DRY_RUN".to_string() } else { "LIVE".to_string() },
+        mode: if cfg!(debug_assertions) {
+            "DRY_RUN".to_string()
+        } else {
+            "LIVE".to_string()
+        },
         uptime_seconds: state.bot_start_time.elapsed().as_secs(),
         last_update: Utc::now(),
         raydium_price,
@@ -84,16 +83,16 @@ pub async fn update_bot_config(
 ) -> Result<(StatusCode, Json<ApiResponse<String>>), StatusCode> {
     // Log change with timestamp and source
     let now = Utc::now();
-    let old_config = {
-        state.runtime_config.read().await.clone()
-    };
+    let old_config = { state.runtime_config.read().await.clone() };
 
     // Validate input
     let mut errors: Vec<String> = Vec::new();
     if new_config.min_profit_usd <= Decimal::ZERO {
         errors.push("min_profit_usd must be > 0".to_string());
     }
-    if new_config.max_position_sol < Decimal::from_f64_retain(0.001).unwrap() || new_config.max_position_sol > Decimal::from_f64_retain(10.0).unwrap() {
+    if new_config.max_position_sol < Decimal::from_f64_retain(0.001).unwrap()
+        || new_config.max_position_sol > Decimal::from_f64_retain(10.0).unwrap()
+    {
         errors.push("max_position_sol must be between 0.001 and 10.0 SOL".to_string());
     }
     if new_config.max_daily_trades == 0 || new_config.max_daily_trades > 1000 {
@@ -104,7 +103,11 @@ pub async fn update_bot_config(
     }
 
     if !errors.is_empty() {
-        warn!("[{}][CONFIG][API] Validation failed: {:?}", now.to_rfc3339(), errors);
+        warn!(
+            "[{}][CONFIG][API] Validation failed: {:?}",
+            now.to_rfc3339(),
+            errors
+        );
         // Return 400 with JSON error body
         let body = ApiResponse::<String>::error(errors.join("; "));
         return Ok((StatusCode::BAD_REQUEST, Json(body)));
@@ -112,7 +115,9 @@ pub async fn update_bot_config(
 
     info!(
         "[{}][CONFIG][API] Update accepted: old={:?} -> new={:?}",
-        now.to_rfc3339(), old_config, new_config
+        now.to_rfc3339(),
+        old_config,
+        new_config
     );
 
     // Update runtime config in memory
@@ -130,7 +135,12 @@ pub async fn update_bot_config(
     };
     super::server::broadcast_websocket_message(&state.websocket_tx, msg).await;
 
-    Ok((StatusCode::OK, Json(ApiResponse::success("Configuration updated successfully".to_string()))))
+    Ok((
+        StatusCode::OK,
+        Json(ApiResponse::success(
+            "Configuration updated successfully".to_string(),
+        )),
+    ))
 }
 
 /// Get transaction history
@@ -155,7 +165,9 @@ pub async fn get_daily_stats(
     State(state): State<AppState>,
     Query(params): Query<StatsQuery>,
 ) -> Result<Json<ApiResponse<Option<DailyStats>>>, StatusCode> {
-    let date = params.date.unwrap_or_else(|| Utc::now().format("%Y-%m-%d").to_string());
+    let date = params
+        .date
+        .unwrap_or_else(|| Utc::now().format("%Y-%m-%d").to_string());
 
     match state.database.get_daily_stats(&date).await {
         Ok(stats) => Ok(Json(ApiResponse::success(stats))),
@@ -171,11 +183,13 @@ pub async fn start_bot(
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<String>>, StatusCode> {
     info!("🚀 Starting bot via API");
-    
+
     let mut bot_running = state.bot_running.write().await;
     *bot_running = true;
-    
-    Ok(Json(ApiResponse::success("Bot started successfully".to_string())))
+
+    Ok(Json(ApiResponse::success(
+        "Bot started successfully".to_string(),
+    )))
 }
 
 /// Stop the bot
@@ -183,11 +197,13 @@ pub async fn stop_bot(
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<String>>, StatusCode> {
     info!("⏹️ Stopping bot via API");
-    
+
     let mut bot_running = state.bot_running.write().await;
     *bot_running = false;
-    
-    Ok(Json(ApiResponse::success("Bot stopped successfully".to_string())))
+
+    Ok(Json(ApiResponse::success(
+        "Bot stopped successfully".to_string(),
+    )))
 }
 
 /// Pause the bot
@@ -195,11 +211,13 @@ pub async fn pause_bot(
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<String>>, StatusCode> {
     info!("⏸️ Pausing bot via API");
-    
+
     let mut bot_running = state.bot_running.write().await;
     *bot_running = false;
-    
-    Ok(Json(ApiResponse::success("Bot paused successfully".to_string())))
+
+    Ok(Json(ApiResponse::success(
+        "Bot paused successfully".to_string(),
+    )))
 }
 
 /// Emergency stop the bot
@@ -210,13 +228,24 @@ pub async fn emergency_stop(
     let now = chrono::Utc::now();
     let (reason, source) = match body {
         Some(v) => (
-            v.get("reason").and_then(|x| x.as_str()).unwrap_or("unspecified").to_string(),
-            v.get("source").and_then(|x| x.as_str()).unwrap_or("api").to_string(),
+            v.get("reason")
+                .and_then(|x| x.as_str())
+                .unwrap_or("unspecified")
+                .to_string(),
+            v.get("source")
+                .and_then(|x| x.as_str())
+                .unwrap_or("api")
+                .to_string(),
         ),
         None => ("unspecified".to_string(), "api".to_string()),
     };
 
-    warn!("[{}][EMERGENCY][{}] reason={}", now.to_rfc3339(), source, reason);
+    warn!(
+        "[{}][EMERGENCY][{}] reason={}",
+        now.to_rfc3339(),
+        source,
+        reason
+    );
 
     let mut bot_running = state.bot_running.write().await;
     *bot_running = false;
@@ -226,5 +255,7 @@ pub async fn emergency_stop(
     // - Close positions
     // - Send Discord alert
 
-    Ok(Json(ApiResponse::success("Emergency stop executed".to_string())))
+    Ok(Json(ApiResponse::success(
+        "Emergency stop executed".to_string(),
+    )))
 }

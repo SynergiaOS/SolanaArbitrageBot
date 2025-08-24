@@ -1,5 +1,5 @@
 use anyhow::Result;
-use log::{info, warn, error};
+use log::{error, info, warn};
 use reqwest;
 use serde_json::json;
 use tokio::time::{sleep, Duration};
@@ -20,7 +20,12 @@ impl DiscordAlert {
         }
     }
 
-    pub async fn send_startup_alert(&self, wallet_address: &str, network: &str, mode: &str) -> Result<()> {
+    pub async fn send_startup_alert(
+        &self,
+        wallet_address: &str,
+        network: &str,
+        mode: &str,
+    ) -> Result<()> {
         if !self.enabled {
             return Ok(());
         }
@@ -36,7 +41,7 @@ impl DiscordAlert {
                         "inline": true
                     },
                     {
-                        "name": "🌐 Network", 
+                        "name": "🌐 Network",
                         "value": network,
                         "inline": true
                     },
@@ -57,12 +62,12 @@ impl DiscordAlert {
     }
 
     pub async fn send_profit_alert(
-        &self, 
-        profit_usd: f64, 
-        signature: &str, 
-        buy_dex: &str, 
+        &self,
+        profit_usd: f64,
+        signature: &str,
+        buy_dex: &str,
         sell_dex: &str,
-        amount_sol: f64
+        amount_sol: f64,
     ) -> Result<()> {
         if !self.enabled {
             return Ok(());
@@ -111,7 +116,7 @@ impl DiscordAlert {
         raydium_price: f64,
         orca_price: f64,
         profit_percent: f64,
-        confidence: u8
+        confidence: u8,
     ) -> Result<()> {
         if !self.enabled {
             return Ok(());
@@ -190,7 +195,7 @@ impl DiscordAlert {
         }
 
         let spread = (orca_price - raydium_price).abs() / raydium_price * 100.0;
-        
+
         let message = json!({
             "embeds": [{
                 "title": "📊 Price Update",
@@ -224,7 +229,8 @@ impl DiscordAlert {
 
     async fn send_webhook(&self, payload: serde_json::Value) -> Result<()> {
         for attempt in 1..=3 {
-            match self.client
+            match self
+                .client
                 .post(&self.webhook_url)
                 .json(&payload)
                 .send()
@@ -242,12 +248,12 @@ impl DiscordAlert {
                     warn!("Discord webhook attempt {} failed: {}", attempt, e);
                 }
             }
-            
+
             if attempt < 3 {
                 sleep(Duration::from_secs(2)).await;
             }
         }
-        
+
         error!("Failed to send Discord alert after 3 attempts");
         Ok(()) // Don't fail the whole bot for Discord issues
     }
@@ -255,8 +261,14 @@ impl DiscordAlert {
 
 impl DiscordAlert {
     pub async fn send_dashboard_status(&self, event: &str, info: &str) -> Result<()> {
-        if !self.enabled { return Ok(()); }
-        let color = match event { "connected" => 3066993, "disconnected" => 15158332, _ => 3447003 };
+        if !self.enabled {
+            return Ok(());
+        }
+        let color = match event {
+            "connected" => 3066993,
+            "disconnected" => 15158332,
+            _ => 3447003,
+        };
         let message = serde_json::json!({
             "embeds": [{
                 "title": "🌐 Dashboard Status",

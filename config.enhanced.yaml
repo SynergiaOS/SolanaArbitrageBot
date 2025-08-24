@@ -1,0 +1,249 @@
+# 🚀 Enhanced Solana Arbitrage Bot Configuration
+# Complete configuration for all advanced trading components
+
+# Core arbitrage bot configuration
+core:
+  rpc:
+    url: "https://api.mainnet-beta.solana.com"
+    ws_url: "wss://api.mainnet-beta.solana.com"
+  
+  wallet:
+    path: "./wallet.json"
+    use_ledger: false
+    ledger_path: "44'/501'/0'/0'"
+  
+  dex:
+    raydium:
+      program_id: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"
+      sol_usdc_pool: "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2"
+    orca:
+      program_id: "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"
+      sol_usdc_pool: "HJPjoWUrhoZzkNfRpHuieeFk9WcZWjwy6PBjZ81ngndJ"
+  
+  limits:
+    max_position_sol: 2.0
+    min_profit_percent: 0.5
+    min_profit_usd: 1.0
+    max_slippage_percent: 0.3
+    max_daily_loss_usd: 50.0
+    max_daily_trades: 100
+  
+  execution:
+    priority_fee_lamports: 50000
+    simulation_required: false
+    max_retries: 3
+  
+  discord:
+    webhook_url: "YOUR_DISCORD_WEBHOOK_URL"
+    enabled: true
+    alert_on_profit: true
+    alert_on_error: true
+    alert_on_startup: true
+  
+  web:
+    host: "127.0.0.1"
+    port: 8080
+    enable_cors: true
+
+# Enhanced sniper bot configuration
+sniper:
+  # Capital allocation
+  max_sniper_allocation_percent: 20.0  # 20% of total capital for sniping
+  max_position_sol: 1.0                # Max 1 SOL per snipe
+  min_liquidity_sol: 10.0              # Minimum 10 SOL liquidity required
+  max_daily_loss_usd: 100.0            # $100 daily loss limit for sniper
+  
+  # Performance targets
+  target_execution_ms: 100             # Sub-100ms execution target
+  risk_tolerance: 0.6                  # Medium-high risk tolerance (0.0-1.0)
+  
+  # Feature flags
+  enable_auto_profit_taking: true
+  enable_rug_detection: true
+  
+  # Market cap filters
+  min_market_cap_usd: 50000.0          # $50k minimum market cap
+  max_market_cap_usd: 5000000.0        # $5M maximum market cap
+  
+  # Fast executor configuration
+  executor_config:
+    target_execution_ms: 100
+    max_slippage_percent: 1.0
+    priority_fee_lamports: 100000      # High priority for speed
+    compute_unit_limit: 400000
+    skip_preflight: true               # Skip for maximum speed
+    max_retries: 2
+    retry_delay_ms: 50
+    parallel_submission: true
+    precompute_templates: true
+  
+  # Rug detector configuration
+  rug_detector_config:
+    sensitivity: 0.8                   # High sensitivity
+    min_holder_count: 50
+    max_team_allocation: 0.3           # 30% max team allocation
+    max_top10_concentration: 0.7       # 70% max top 10 concentration
+    min_liquidity_lock_percent: 0.8    # 80% min liquidity lock
+    min_lock_duration_hours: 720       # 30 days minimum lock
+    honeypot_threshold: 0.3
+    enable_social_analysis: true
+    enable_contract_analysis: true
+    enable_creator_analysis: true
+  
+  # Profit taker configuration
+  profit_taker_config:
+    profit_levels: [2.0, 5.0, 10.0, 20.0]        # 2x, 5x, 10x, 20x
+    sell_percentages: [25.0, 25.0, 25.0, 25.0]   # Sell 25% at each level
+    stop_loss_percent: -50.0                      # -50% stop loss
+    trailing_stop_percent: 20.0                   # 20% trailing stop
+    max_hold_time_hours: 168                      # 1 week max hold
+    min_profit_threshold: 10.0                    # 10% min profit to start taking
+    enable_dynamic_exits: true
+    enable_trailing_stops: true
+    enable_time_exits: true
+    exit_slippage_tolerance: 2.0
+
+# GEPA optimizer configuration
+gepa:
+  # Genetic algorithm parameters
+  population_size: 50
+  max_generations: 100
+  mutation_rate: 0.1
+  crossover_rate: 0.8
+  elite_percentage: 0.2
+  tournament_size: 5
+  
+  # Evaluation parameters
+  evaluation_period_hours: 24
+  min_trades_for_evaluation: 10
+  enable_adaptive_mutation: true
+  enable_multi_objective: true
+  
+  # Parameter bounds
+  parameter_bounds:
+    position_size_min: 5.0
+    position_size_max: 25.0
+    profit_threshold_min: 0.1
+    profit_threshold_max: 2.0
+    slippage_tolerance_min: 0.1
+    slippage_tolerance_max: 1.0
+    timing_window_min: 50
+    timing_window_max: 500
+    stop_loss_min: -10.0
+    stop_loss_max: -1.0
+    take_profit_levels_min: 2
+    take_profit_levels_max: 6
+  
+  # Fitness function weights
+  fitness_weights:
+    sharpe_ratio: 0.3
+    total_return: 0.25
+    max_drawdown: -0.2              # Negative because lower is better
+    win_rate: 0.15
+    profit_factor: 0.1
+    trade_frequency: 0.05
+    risk_adjusted_return: 0.35
+
+# Kestra orchestration configuration
+kestra:
+  # Server configuration
+  server_url: "http://localhost:8080"
+  api_token: "YOUR_KESTRA_API_TOKEN"
+  namespace: "solana-arbitrage"
+  
+  # Workflow configuration
+  enable_monitoring: true
+  enable_scheduling: true
+  enable_alerting: true
+  execution_timeout_minutes: 30
+  max_concurrent_workflows: 5
+  
+  # Retry configuration
+  retry_config:
+    max_retries: 3
+    retry_delay_seconds: 60
+    backoff_multiplier: 2.0
+    max_retry_delay_seconds: 300
+  
+  # Data pipeline configuration
+  pipeline_config:
+    enable_market_data_ingestion: true
+    enable_performance_analysis: true
+    enable_risk_monitoring: true
+    data_retention_days: 90
+    batch_size: 1000
+    processing_interval_minutes: 5
+  
+  # Alert configuration
+  alert_config:
+    enable_slack_alerts: true
+    enable_email_alerts: false
+    enable_webhook_alerts: true
+    slack_webhook_url: "YOUR_SLACK_WEBHOOK_URL"
+    alert_thresholds:
+      error_rate_percent: 5.0
+      loss_amount_usd: 20.0
+      downtime_minutes: 5.0
+
+# Feature flags - enable/disable components
+features:
+  enable_arbitrage: true              # Core arbitrage trading
+  enable_sniper: true                 # Enhanced sniper bot
+  enable_gepa_optimization: true      # Genetic parameter optimization
+  enable_kestra_orchestration: true   # Workflow orchestration
+  enable_web_dashboard: true          # Web monitoring dashboard
+  enable_discord_alerts: true         # Discord notifications
+
+# Advanced configuration
+advanced:
+  # Performance tuning
+  performance:
+    calculator_threads: 4
+    monitor_update_interval_ms: 100
+    price_cache_duration_ms: 50
+    max_concurrent_requests: 20
+    memory_limit_mb: 2048
+    gc_interval_seconds: 300
+  
+  # Security settings
+  security:
+    enable_rate_limiting: true
+    max_requests_per_minute: 1000
+    enable_ip_whitelist: false
+    allowed_ips: []
+    enable_api_key_auth: true
+    api_key_header: "X-API-Key"
+  
+  # Logging configuration
+  logging:
+    level: "info"
+    file: "./logs/enhanced_bot.log"
+    max_file_size_mb: 100
+    max_files: 10
+    enable_json_format: true
+    enable_metrics_logging: true
+  
+  # Database configuration
+  database:
+    url: "sqlite:./data/enhanced_bot.db"
+    max_connections: 20
+    connection_timeout_seconds: 30
+    enable_migrations: true
+    backup_interval_hours: 6
+  
+  # Monitoring configuration
+  monitoring:
+    enable_prometheus_metrics: false
+    prometheus_port: 9090
+    enable_health_checks: true
+    health_check_interval_seconds: 30
+    enable_performance_profiling: false
+
+# Environment-specific overrides
+environment: "production"
+debug_mode: false
+
+# Version and metadata
+version: "2.0.0"
+build_date: "2025-01-23"
+description: "Enhanced Solana Arbitrage Bot with Sniper, GEPA, and Kestra integration"

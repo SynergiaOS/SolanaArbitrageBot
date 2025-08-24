@@ -1,7 +1,7 @@
 //! Type conversion utilities for Decimal ↔ f64
 
+use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal::Decimal;
-use rust_decimal::prelude::{ToPrimitive, FromPrimitive};
 
 /// Convert Decimal to f64 with fallback to 0.0
 pub fn decimal_to_f64(d: Decimal) -> f64 {

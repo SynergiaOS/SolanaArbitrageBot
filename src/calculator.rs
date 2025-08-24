@@ -1,10 +1,8 @@
 //! Enhanced Profit Calculator with Real-time Data Support
 //! Optimized for high-frequency arbitrage calculations with minimal allocations
 
+use log::info;
 use rust_decimal::prelude::*;
-use rust_decimal_macros::dec;
-use anyhow::Result;
-use log::{debug, info, warn};
 use std::time::Instant;
 
 // Pre-computed constants for performance
@@ -25,7 +23,7 @@ pub struct ArbitrageOpportunity {
     pub profit_percentage: f64,
     pub estimated_gas_sol: f64,
     pub price_impact: f64,
-    pub confidence_score: f64,  // 0.0 to 1.0
+    pub confidence_score: f64, // 0.0 to 1.0
 }
 
 #[derive(Debug, Clone)]
@@ -79,7 +77,7 @@ impl ProfitCalculator {
         };
         (self.calculation_count, avg_time_ms)
     }
-    
+
     pub fn with_market_conditions(mut self, conditions: MarketConditions) -> Self {
         // Adjust parameters based on market conditions
         self.priority_fee_multiplier = match conditions.network_congestion {
@@ -91,7 +89,7 @@ impl ProfitCalculator {
         self.market_conditions = Some(conditions);
         self
     }
-    
+
     pub fn calculate_opportunity(
         &mut self, // Made mutable for performance tracking
         raydium_price: f64,
@@ -114,26 +112,29 @@ impl ProfitCalculator {
         if spread_percent < self.min_profit_percent_f64 {
             return None;
         }
-        
+
         // Determine buy/sell direction
         let (buy_dex, buy_price, sell_dex, sell_price) = if raydium_price < orca_price {
             ("Raydium", raydium_price, "Orca", orca_price)
         } else {
             ("Orca", orca_price, "Raydium", raydium_price)
         };
-        
-        info!("🎯 Price spread detected: {:.4}% | Buy {} @ ${:.4}, Sell {} @ ${:.4}",
-            spread_percent, buy_dex, buy_price, sell_dex, sell_price);
-        
+
+        info!(
+            "🎯 Price spread detected: {:.4}% | Buy {} @ ${:.4}, Sell {} @ ${:.4}",
+            spread_percent, buy_dex, buy_price, sell_dex, sell_price
+        );
+
         // Calculate optimal position size (optimized)
-        let position_sol = self.calculate_optimal_size_fast(spread_percent, max_position_sol, avg_price);
+        let position_sol = self.calculate_optimal_size(spread_percent, max_position_sol, avg_price);
 
         // Pre-compute common values
         let position_value_usd = position_sol * avg_price;
         let gross_profit_usd = position_sol * price_diff;
 
         // Calculate all costs in one pass (optimized)
-        let gas_cost_sol = BASE_GAS_COST_SOL * self.priority_fee_multiplier * JUPITER_GAS_MULTIPLIER;
+        let gas_cost_sol =
+            BASE_GAS_COST_SOL * self.priority_fee_multiplier * JUPITER_GAS_MULTIPLIER;
         let gas_cost_usd = gas_cost_sol * avg_price;
 
         // DEX fees (pre-computed multiplier)
@@ -143,15 +144,15 @@ impl ProfitCalculator {
         let slippage_cost_usd = position_value_usd * self.max_slippage_percent_f64 * 0.01;
 
         // Price impact (simplified for speed)
-        let price_impact = self.estimate_price_impact_fast(position_sol);
+        let price_impact = self.estimate_price_impact(position_sol, avg_price);
         let price_impact_cost = position_value_usd * price_impact * 0.01;
-        
+
         // Total costs
         let total_costs = gas_cost_usd + dex_fees_usd + slippage_cost_usd + price_impact_cost;
         let net_profit_usd = gross_profit_usd - total_costs;
-        
+
         // Fast confidence score (simplified)
-        let confidence = self.calculate_confidence_score_fast(spread_percent, net_profit_usd);
+        let confidence = self.calculate_confidence_score(spread_percent, position_sol, net_profit_usd);
 
         // Update performance tracking
         self.calculation_count += 1;
@@ -176,9 +177,14 @@ impl ProfitCalculator {
             None // Removed debug log for performance
         }
     }
-    
-    /// Optimized position sizing with pre-computed thresholds
-    fn calculate_optimal_size_fast(&self, spread_percent: f64, max_position: f64, avg_price: f64) -> f64 {
+
+
+    fn calculate_optimal_size(
+        &self,
+        spread_percent: f64,
+        max_position: f64,
+        avg_price: f64,
+    ) -> f64 {
         // Fast branching with pre-computed multipliers
         let base_multiplier = if spread_percent > 2.0 {
             1.0
@@ -190,62 +196,27 @@ impl ProfitCalculator {
             0.25
         };
 
-        let base_size = max_position * base_multiplier;
-
-        // Fast market condition adjustment
-        let adjusted_size = if let Some(conditions) = &self.market_conditions {
+        // Apply market conditions adjustment
+        let market_multiplier = if let Some(conditions) = &self.market_conditions {
             match conditions.network_congestion {
-                NetworkCongestion::Extreme => base_size * 0.5,
-                NetworkCongestion::High => base_size * 0.75,
-                _ => base_size,
+                NetworkCongestion::Low => 1.0,
+                NetworkCongestion::Medium => 0.8,
+                NetworkCongestion::High => 0.5,
+                NetworkCongestion::Extreme => 0.25,
             }
         } else {
-            base_size
+            1.0
         };
 
-        // Fast USD cap calculation
+        let base_size = max_position * base_multiplier * market_multiplier;
+
+        // Apply USD cap
         let max_sol_from_usd = MAX_USD_POSITION / avg_price;
-        adjusted_size.min(max_sol_from_usd)
+        base_size.min(max_sol_from_usd).min(max_position)
     }
 
-    /// Legacy method for compatibility
-    fn calculate_optimal_size(&self, spread_percent: f64, max_position: f64, avg_price: f64) -> f64 {
-        self.calculate_optimal_size_fast(spread_percent, max_position, avg_price)
-    }
-    
-    /// Fast price impact estimation (simplified)
-    fn estimate_price_impact_fast(&self, position_sol: f64) -> f64 {
-        // Simplified linear model for speed
-        if position_sol < 1.0 {
-            0.1 // 0.1% for small trades
-        } else if position_sol < 10.0 {
-            0.2 // 0.2% for medium trades
-        } else {
-            0.5 // 0.5% for large trades
-        }
-    }
 
-    /// Fast confidence scoring (simplified)
-    fn calculate_confidence_score_fast(&self, spread: f64, profit: f64) -> f64 {
-        let mut score: f64 = 0.5; // Base score
 
-        // Spread quality (fast branching)
-        if spread > 1.0 {
-            score += 0.3;
-        } else if spread > 0.5 {
-            score += 0.2;
-        }
-
-        // Profit quality (fast branching)
-        if profit > 50.0 {
-            score += 0.2;
-        } else if profit > 10.0 {
-            score += 0.1;
-        }
-
-        score.min(1.0)
-    }
-    
     fn estimate_price_impact(&self, amount_sol: f64, _price: f64) -> f64 {
         // Simplified price impact estimation
         // In reality, would query liquidity depth
@@ -259,29 +230,29 @@ impl ProfitCalculator {
             0.2 // 0.2% for very large trades
         }
     }
-    
+
     fn calculate_confidence_score(&self, spread: f64, size: f64, profit: f64) -> f64 {
         let mut score: f64 = 0.5; // Base score
-        
+
         // Spread quality
         if spread > 1.0 {
             score += 0.2;
         } else if spread > 0.5 {
             score += 0.1;
         }
-        
+
         // Profit quality
         if profit > 50.0 {
             score += 0.2;
         } else if profit > 10.0 {
             score += 0.1;
         }
-        
+
         // Size appropriateness
         if size < 50.0 {
             score += 0.1; // Smaller is safer
         }
-        
+
         // Market conditions
         if let Some(conditions) = &self.market_conditions {
             if conditions.recent_success_rate > 0.7 {
@@ -291,12 +262,15 @@ impl ProfitCalculator {
                 score += 0.1;
             }
         }
-        
+
         score.min(1.0)
     }
-    
+
     // Advanced analysis methods
-    pub fn analyze_historical_opportunity(&mut self, prices: &[(f64, f64, u64)]) -> Vec<ArbitrageOpportunity> {
+    pub fn analyze_historical_opportunity(
+        &mut self,
+        prices: &[(f64, f64, u64)],
+    ) -> Vec<ArbitrageOpportunity> {
         // Analyze historical price data for backtesting
         let mut opportunities = Vec::new();
 
@@ -308,22 +282,25 @@ impl ProfitCalculator {
 
         opportunities
     }
-    
+
     pub fn calculate_daily_metrics(&self, opportunities: &[ArbitrageOpportunity]) -> DailyMetrics {
-        let total_profit: f64 = opportunities.iter()
-            .map(|o| o.profit_after_fees_usd)
-            .sum();
-        
+        let total_profit: f64 = opportunities.iter().map(|o| o.profit_after_fees_usd).sum();
+
         let avg_profit = if !opportunities.is_empty() {
             total_profit / opportunities.len() as f64
         } else {
             0.0
         };
-        
-        let best_trade = opportunities.iter()
-            .max_by(|a, b| a.profit_after_fees_usd.partial_cmp(&b.profit_after_fees_usd).unwrap())
+
+        let best_trade = opportunities
+            .iter()
+            .max_by(|a, b| {
+                a.profit_after_fees_usd
+                    .partial_cmp(&b.profit_after_fees_usd)
+                    .unwrap()
+            })
             .cloned();
-        
+
         DailyMetrics {
             total_opportunities: opportunities.len(),
             total_profit_usd: total_profit,
@@ -344,7 +321,7 @@ pub struct DailyMetrics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     fn test_config() -> crate::Config {
         crate::Config {
             rpc: crate::RpcConfig {
@@ -387,16 +364,19 @@ mod tests {
     #[test]
     fn test_profitable_arbitrage() {
         let config = test_config();
-        let calc = ProfitCalculator::new(&config);
+        let mut calc = ProfitCalculator::new(&config);
 
         // Ustawiamy nieco szerszy spread (1.2%), by po uwzględnieniu kosztów wynik był dodatni
         let opp = calc.calculate_opportunity(
-            150.0,    // Raydium price
-            151.8,    // Orca price (~1.2% higher)
-            100.0,    // 100 SOL max position to ensure net > 0 after costs
+            150.0, // Raydium price
+            151.8, // Orca price (~1.2% higher)
+            100.0, // 100 SOL max position to ensure net > 0 after costs
         );
 
-        assert!(opp.is_some(), "Expected profitable opportunity at ~1.2% spread with sufficient size");
+        assert!(
+            opp.is_some(),
+            "Expected profitable opportunity at ~1.2% spread with sufficient size"
+        );
         let opp = opp.unwrap();
         assert_eq!(opp.buy_dex, "Raydium");
         assert_eq!(opp.sell_dex, "Orca");
@@ -407,18 +387,18 @@ mod tests {
     #[test]
     fn test_unprofitable_arbitrage() {
         let config = test_config();
-        let calc = ProfitCalculator::new(&config);
-        
+        let mut calc = ProfitCalculator::new(&config);
+
         // 0.1% spread should NOT be profitable after fees
         let opp = calc.calculate_opportunity(
-            150.0,   // Raydium price
-            150.15,  // Orca price (0.1% higher)
-            10.0,    // 10 SOL max position
+            150.0,  // Raydium price
+            150.15, // Orca price (0.1% higher)
+            10.0,   // 10 SOL max position
         );
-        
+
         assert!(opp.is_none());
     }
-    
+
     #[test]
     fn test_market_conditions_impact() {
         let config = test_config();
@@ -427,12 +407,11 @@ mod tests {
             volatility: 0.5,
             recent_success_rate: 0.8,
         };
-        
-        let calc = ProfitCalculator::new(&config)
-            .with_market_conditions(conditions);
-        
+
+        let mut calc = ProfitCalculator::new(&config).with_market_conditions(conditions);
+
         let opp = calc.calculate_opportunity(150.0, 152.0, 100.0);
-        
+
         assert!(opp.is_some());
         let opp = opp.unwrap();
         // Position should be reduced due to high congestion

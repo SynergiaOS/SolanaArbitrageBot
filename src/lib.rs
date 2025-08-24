@@ -1,28 +1,36 @@
 //! Solana Arbitrage Bot Library
 //! Exports public types and modules for external use and testing
 
-pub mod monitor;
 pub mod calculator;
-pub mod executor;
-pub mod safety;
-pub mod ledger;
 pub mod discord;
+pub mod executor;
+pub mod ledger;
+pub mod monitor;
+pub mod safety;
 pub mod sniper;
 pub mod utils;
-pub mod web;
 pub mod verification;
+pub mod web;
+
+// Advanced trading components (temporarily disabled)
+// pub mod gepa;
+// pub mod kestra;
 
 // Re-export main types
-pub use crate::monitor::{DexMonitor, PriceUpdate};
-pub use crate::calculator::{ProfitCalculator, ArbitrageOpportunity, MarketConditions, NetworkCongestion};
-pub use crate::executor::{TransactionExecutor, WalletType};
-pub use crate::safety::SafetyGuard;
-pub use crate::ledger::LedgerConnection;
+pub use crate::calculator::{
+    ArbitrageOpportunity, MarketConditions, NetworkCongestion, ProfitCalculator,
+};
 pub use crate::discord::DiscordAlert;
-pub use crate::web::{WebServer, WebConfig};
+pub use crate::executor::{TransactionExecutor, WalletType};
+pub use crate::ledger::LedgerConnection;
+pub use crate::monitor::{DexMonitor, PriceUpdate};
+pub use crate::safety::SafetyGuard;
+pub use crate::web::{WebConfig, WebServer};
 
 // Re-export sniper types
-pub use crate::sniper::{SniperEngine, SniperConfig, NewToken, TradeResult, Position, SafetyResult, SellAction};
+pub use crate::sniper::{
+    NewToken, Position, SafetyResult, SellAction, SniperConfig, SniperEngine, TradeResult,
+};
 
 // Re-export config types
 #[derive(Debug, Clone, serde::Deserialize)]

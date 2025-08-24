@@ -48,9 +48,16 @@ rand = "0.8"
 futures-util = "0.3"
 regex = "1.0"
 hex = "0.4.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
 sha2 = "0.10.0"
 shellexpand = "3.0"
-uuid = { version = "1.0", features = ["v4"] }
+
+# Enhanced components dependencies
+futures = "0.3"
+
+# Sniper bot dependencies
+tungstenite = "0.20"
+url = "2.4"
 
 # Database
 rusqlite = { version = "0.32", features = ["bundled", "chrono"] }
@@ -77,6 +84,10 @@ path = "src/bin/sniper.rs"
 [[bin]]
 name = "historical_backtest"
 path = "src/bin/historical_backtest.rs"
+
+[[bin]]
+name = "enhanced_arbitrage_bot"
+path = "src/bin/enhanced_arbitrage_bot.rs"
 
 [profile.release]
 opt-level = 3

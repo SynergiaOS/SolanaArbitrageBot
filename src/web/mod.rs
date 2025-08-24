@@ -1,18 +1,21 @@
 //! Web Dashboard Module
 //! Provides HTTP API and WebSocket connections for the Solana Arbitrage Bot dashboard
 
-pub mod server;
-pub mod handlers;
-pub mod websocket;
 pub mod auth;
 pub mod database;
+pub mod enhanced_websocket;
+pub mod handlers;
+pub mod mock_sniper;
+pub mod server;
+pub mod websocket;
 
-pub use server::WebServer;
 pub use database::Database;
+pub use enhanced_websocket::{enhanced_websocket_handler, EnhancedWebSocketState};
+pub use server::WebServer;
 
-use serde::{Deserialize, Serialize};
-use rust_decimal::Decimal;
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
 
 /// Configuration for the web dashboard
 #[derive(Debug, Clone, Deserialize)]
@@ -101,7 +104,7 @@ impl<T> ApiResponse<T> {
             error: None,
         }
     }
-    
+
     pub fn error(message: String) -> Self {
         Self {
             success: false,
@@ -140,4 +143,88 @@ pub enum WebSocketMessage {
 
     #[serde(rename = "pong")]
     Pong,
+}
+
+/// Enhanced WebSocket message types for transaction handling
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum EnhancedWebSocketMessage {
+    // Client → Server messages
+    #[serde(rename = "register_wallet")]
+    RegisterWallet { wallet_address: String },
+
+    #[serde(rename = "enable_auto_snipe")]
+    EnableAutoSnipe { wallet_address: String },
+
+    #[serde(rename = "disable_auto_snipe")]
+    DisableAutoSnipe { wallet_address: String },
+
+    #[serde(rename = "transaction_response")]
+    TransactionResponse {
+        transaction_id: String,
+        signature: String,
+        success: bool,
+        error: Option<String>,
+        wallet_address: String,
+    },
+
+    // Server → Client messages
+    #[serde(rename = "transaction_request")]
+    TransactionRequest {
+        id: String,
+        transaction_type: String, // "snipe", "sell", "swap"
+        token_symbol: String,
+        token_mint: String,
+        amount: String,
+        transaction_data: String, // Base64 encoded transaction
+        metadata: Option<TransactionMetadata>,
+    },
+
+    #[serde(rename = "transaction_cancelled")]
+    TransactionCancelled {
+        transaction_id: String,
+        reason: String,
+    },
+
+    #[serde(rename = "auto_snipe_status")]
+    AutoSnipeStatus {
+        enabled: bool,
+        wallet_address: String,
+    },
+
+    #[serde(rename = "arbitrage_opportunity")]
+    ArbitrageOpportunity {
+        id: String,
+        buy_dex: String,
+        sell_dex: String,
+        buy_price: f64,
+        sell_price: f64,
+        profit_usd: f64,
+        profit_percentage: f64,
+        confidence_score: f64,
+        amount_sol: f64,
+        timestamp: chrono::DateTime<chrono::Utc>,
+    },
+
+    #[serde(rename = "error")]
+    Error {
+        message: String,
+        code: Option<String>,
+    },
+
+    #[serde(rename = "ping")]
+    Ping,
+
+    #[serde(rename = "pong")]
+    Pong,
+}
+
+/// Transaction metadata for enhanced WebSocket messages
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransactionMetadata {
+    pub estimated_gas: Option<f64>,
+    pub price_impact: Option<f64>,
+    pub slippage: Option<f64>,
+    pub priority_fee: Option<f64>,
+    pub max_compute_units: Option<u32>,
 }

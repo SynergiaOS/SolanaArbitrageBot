@@ -3,12 +3,13 @@
 
 use anyhow::Result;
 use clap::Parser;
-use log::{info, error, warn};
+use log::{error, info, warn};
+use rust_decimal::Decimal;
+use solana_arbitrage_bot::utils::conversions::*;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
-use rust_decimal::Decimal;
-use solana_arbitrage_bot::utils::conversions::*;
+use uuid;
 
 // Import from lib
 use solana_arbitrage_bot::*;
@@ -39,7 +40,7 @@ struct Args {
     /// Ledger derivation path for testing
     #[arg(long, default_value = "m/44'/501'/0'/0'")]
     ledger_path: String,
-    
+
     /// Test real API connections and exit
     #[arg(long, default_value_t = false)]
     test_apis: bool,
@@ -49,14 +50,21 @@ struct Args {
 async fn main() -> Result<()> {
     // Initialize logger
     env_logger::init();
-    
+
     // Parse CLI arguments
     let args = Args::parse();
-    
+
     info!("🚀 Starting Solana Arbitrage Bot v2.0");
     info!("Network: {}", args.network);
-    info!("Mode: {}", if args.dry_run { "DRY RUN" } else { "LIVE TRADING" });
-    
+    info!(
+        "Mode: {}",
+        if args.dry_run {
+            "DRY RUN"
+        } else {
+            "LIVE TRADING"
+        }
+    );
+
     // Handle test modes
     if args.test_ledger {
         info!("🔐 Testing Ledger connection...");
@@ -71,19 +79,21 @@ async fn main() -> Result<()> {
             }
         }
     }
-    
+
     if args.test_apis {
         info!("🌐 Testing API connections...");
         test_api_connections().await?;
         return Ok(());
     }
-    
+
     // Load configuration
     let config = load_config(&args.config)?;
-    
+
     // Override max position if specified - kept for CLI, but runtime config may override later
     let cli_max_position = args.max_position;
-    if let Some(v) = cli_max_position { info!("CLI override max position: {} SOL", v); }
+    if let Some(v) = cli_max_position {
+        info!("CLI override max position: {} SOL", v);
+    }
 
     // Initialize shared state
     let state = SharedState {
@@ -92,10 +102,10 @@ async fn main() -> Result<()> {
         trades_today: Arc::new(Mutex::new(0)),
         profit_today: Arc::new(Mutex::new(Decimal::ZERO)),
     };
-    
+
     // Create price update channel
     let (price_tx, mut price_rx) = tokio::sync::mpsc::channel::<monitor::PriceUpdate>(100);
-    
+
     // Initialize components
     let monitor = monitor::DexMonitor::new(
         state.raydium_price.clone(),
@@ -103,7 +113,7 @@ async fn main() -> Result<()> {
         &config,
     )?
     .with_price_channel(price_tx);
-    
+
     let mut calculator = calculator::ProfitCalculator::new(&config);
     let executor = executor::TransactionExecutor::new(&config, args.dry_run)?;
     let mut safety = safety::SafetyGuard::new(&config);
@@ -129,7 +139,9 @@ async fn main() -> Result<()> {
     // Setup Web Dashboard
     let web_server = if let Some(web_config) = &config.web {
         if web_config.enabled {
-            match web::WebServer::new(state.clone(), web_config.clone(), discord.clone(), &config).await {
+            match web::WebServer::new(state.clone(), web_config.clone(), discord.clone(), &config)
+                .await
+            {
                 Ok(server) => {
                     info!("🌐 Web dashboard initialized");
                     Some(server)
@@ -150,35 +162,47 @@ async fn main() -> Result<()> {
     if let Some(ref discord_alert) = discord {
         let wallet_addr = executor.get_wallet_address();
 
-        if let Err(e) = discord_alert.send_startup_alert(
-            &wallet_addr,
-            &args.network,
-            if args.dry_run { "DRY RUN" } else { "LIVE TRADING" }
-        ).await {
+        if let Err(e) = discord_alert
+            .send_startup_alert(
+                &wallet_addr,
+                &args.network,
+                if args.dry_run {
+                    "DRY RUN"
+                } else {
+                    "LIVE TRADING"
+                },
+            )
+            .await
+        {
             warn!("Failed to send Discord startup alert: {}", e);
         }
 
         // Send dashboard status alert
         if web_server.is_some() {
-            if let Err(e) = discord_alert.send_error_alert(
-                "Web dashboard started successfully",
-                "Dashboard is now available for monitoring and control"
-            ).await {
+            if let Err(e) = discord_alert
+                .send_error_alert(
+                    "Web dashboard started successfully",
+                    "Dashboard is now available for monitoring and control",
+                )
+                .await
+            {
                 warn!("Failed to send dashboard status alert: {}", e);
             }
         }
     }
-    
-    // Get WebSocket sender, database, and runtime config references before moving web_server
-    let (websocket_tx, web_db, runtime_cfg) = if let Some(ref web_server) = web_server {
-        (
-            Some(web_server.get_websocket_sender()),
-            Some(web_server.get_database()),
-            Some(web_server.get_runtime_config()),
-        )
-    } else {
-        (None, None, None)
-    };
+
+    // Get WebSocket sender, database, enhanced WebSocket state, and runtime config references before moving web_server
+    let (websocket_tx, web_db, enhanced_ws_state, runtime_cfg) =
+        if let Some(ref web_server) = web_server {
+            (
+                Some(web_server.get_websocket_sender()),
+                Some(web_server.get_database()),
+                Some(web_server.get_enhanced_ws_state()),
+                Some(web_server.get_runtime_config()),
+            )
+        } else {
+            (None, None, None, None)
+        };
 
     // Attach runtime_config to SafetyGuard for live updates of daily limits
     if let Some(ref arc_cfg) = runtime_cfg {
@@ -202,7 +226,7 @@ async fn main() -> Result<()> {
             error!("Monitor error: {}", e);
         }
     });
-    
+
     // Start price update handler
     let discord_clone = discord.clone();
     let websocket_tx_clone = websocket_tx.clone();
@@ -224,7 +248,8 @@ async fn main() -> Result<()> {
             // Send WebSocket price update to dashboard
             if raydium_price > Decimal::ZERO && orca_price > Decimal::ZERO {
                 if let Some(ref ws_tx) = websocket_tx_clone {
-                    let spread_percent = ((orca_price - raydium_price).abs() / raydium_price) * Decimal::from(100);
+                    let spread_percent =
+                        ((orca_price - raydium_price).abs() / raydium_price) * Decimal::from(100);
                     let price_update = web::PriceUpdate {
                         timestamp: chrono::Utc::now(),
                         raydium_price,
@@ -239,9 +264,18 @@ async fn main() -> Result<()> {
             }
 
             // Send Discord price update every 30 seconds (to avoid spam)
-            if last_discord_update.elapsed().as_secs() > 30 && raydium_price > Decimal::ZERO && orca_price > Decimal::ZERO {
+            if last_discord_update.elapsed().as_secs() > 30
+                && raydium_price > Decimal::ZERO
+                && orca_price > Decimal::ZERO
+            {
                 if let Some(ref discord_alert) = discord_clone {
-                    if let Err(e) = discord_alert.send_price_update(decimal_to_f64(raydium_price), decimal_to_f64(orca_price)).await {
+                    if let Err(e) = discord_alert
+                        .send_price_update(
+                            decimal_to_f64(raydium_price),
+                            decimal_to_f64(orca_price),
+                        )
+                        .await
+                    {
                         warn!("Failed to send Discord price update: {}", e);
                     }
                 }
@@ -249,15 +283,18 @@ async fn main() -> Result<()> {
             }
         }
     });
-    
+
     // Main arbitrage loop
     info!("💰 Starting arbitrage loop...");
-    info!("Looking for opportunities > ${:.2} profit", config.limits.min_profit_usd);
-    
+    info!(
+        "Looking for opportunities > ${:.2} profit",
+        config.limits.min_profit_usd
+    );
+
     let mut last_opportunity_time = std::time::Instant::now();
     let mut opportunities_found = 0;
     let mut trades_executed = 0;
-    
+
     loop {
         // Check if we should continue trading
         if !safety.should_continue_trading(&state).await {
@@ -266,19 +303,26 @@ async fn main() -> Result<()> {
             safety.reset_daily_limits(&state).await;
             continue;
         }
-        
+
         // Get current prices
         let raydium = *state.raydium_price.lock().await;
         let orca = *state.orca_price.lock().await;
-        
+
         if let (Some(price_r), Some(price_o)) = (raydium, orca) {
             // Read runtime config values (with CLI override for max_position if provided)
-            let (min_profit_usd_runtime, max_position_runtime) = if let Some(ref arc_cfg) = runtime_cfg {
-                let cfg = arc_cfg.read().await.clone();
-                (decimal_to_f64(cfg.min_profit_usd), decimal_to_f64(cfg.max_position_sol))
-            } else {
-                (decimal_to_f64(config.limits.min_profit_usd), decimal_to_f64(config.limits.max_position_sol))
-            };
+            let (min_profit_usd_runtime, max_position_runtime) =
+                if let Some(ref arc_cfg) = runtime_cfg {
+                    let cfg = arc_cfg.read().await.clone();
+                    (
+                        decimal_to_f64(cfg.min_profit_usd),
+                        decimal_to_f64(cfg.max_position_sol),
+                    )
+                } else {
+                    (
+                        decimal_to_f64(config.limits.min_profit_usd),
+                        decimal_to_f64(config.limits.max_position_sol),
+                    )
+                };
             let max_position_effective = cli_max_position.unwrap_or(max_position_runtime);
 
             // Calculate arbitrage opportunity
@@ -289,7 +333,7 @@ async fn main() -> Result<()> {
             ) {
                 opportunities_found += 1;
                 last_opportunity_time = std::time::Instant::now();
-                
+
                 info!(
                     "🎯 Opportunity #{}: {} @ ${:.4} -> {} @ ${:.4} | Profit: ${:.2} ({:.2}%) | Confidence: {:.0}%",
                     opportunities_found,
@@ -302,45 +346,80 @@ async fn main() -> Result<()> {
                     opportunity.confidence_score * 100.0
                 );
 
+                // Broadcast opportunity to enhanced WebSocket clients
+                if let Some(ref enhanced_ws) = enhanced_ws_state {
+                    let opportunity_msg = web::EnhancedWebSocketMessage::ArbitrageOpportunity {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        buy_dex: opportunity.buy_dex.clone(),
+                        sell_dex: opportunity.sell_dex.clone(),
+                        buy_price: opportunity.buy_price,
+                        sell_price: opportunity.sell_price,
+                        profit_usd: opportunity.profit_after_fees_usd,
+                        profit_percentage: opportunity.profit_percentage,
+                        confidence_score: opportunity.confidence_score,
+                        amount_sol: opportunity.amount_sol,
+                        timestamp: chrono::Utc::now(),
+                    };
+
+                    if let Err(e) = enhanced_ws.broadcast_opportunity(opportunity_msg).await {
+                        warn!(
+                            "Failed to broadcast opportunity to enhanced WebSocket: {}",
+                            e
+                        );
+                    }
+                }
+
                 // Send Discord opportunity alert
                 if let Some(ref discord_alert) = discord {
-                    if let Err(e) = discord_alert.send_opportunity_alert(
-                        decimal_to_f64(price_r),
-                        decimal_to_f64(price_o),
-                        opportunity.profit_percentage,
-                        (opportunity.confidence_score * 100.0) as u8
-                    ).await {
+                    if let Err(e) = discord_alert
+                        .send_opportunity_alert(
+                            decimal_to_f64(price_r),
+                            decimal_to_f64(price_o),
+                            opportunity.profit_percentage,
+                            (opportunity.confidence_score * 100.0) as u8,
+                        )
+                        .await
+                    {
                         warn!("Failed to send Discord opportunity alert: {}", e);
                     }
                 }
 
                 // Execute if profitable enough and confidence is high (min_profit_usd from runtime config)
                 if opportunity.profit_after_fees_usd >= min_profit_usd_runtime
-                    && opportunity.confidence_score > 0.5 {
-
+                    && opportunity.confidence_score > 0.5
+                {
                     // Pre-trade safety check
-                    if !safety.pre_trade_check(&opportunity, config.wallet.use_ledger.unwrap_or(false)).await? {
+                    if !safety
+                        .pre_trade_check(&opportunity, config.wallet.use_ledger.unwrap_or(false))
+                        .await?
+                    {
                         warn!("⚠️ Safety check failed, skipping trade");
                         continue;
                     }
-                    
+
                     match executor.execute_arbitrage(&opportunity).await {
                         Ok(signature) => {
                             trades_executed += 1;
-                            info!("✅ Trade #{} sent! Signature: {}", trades_executed, signature);
+                            info!(
+                                "✅ Trade #{} sent! Signature: {}",
+                                trades_executed, signature
+                            );
 
                             // --- NEW: On-chain verification ---
                             match executor.verify_transaction(&signature).await {
                                 Ok(actual_profit) => {
                                     // Send Discord profit alert with actual profit
                                     if let Some(ref discord_alert) = discord {
-                                        if let Err(e) = discord_alert.send_profit_alert(
-                                            actual_profit,
-                                            &signature.to_string(),
-                                            &opportunity.buy_dex,
-                                            &opportunity.sell_dex,
-                                            opportunity.amount_sol
-                                        ).await {
+                                        if let Err(e) = discord_alert
+                                            .send_profit_alert(
+                                                actual_profit,
+                                                &signature.to_string(),
+                                                &opportunity.buy_dex,
+                                                &opportunity.sell_dex,
+                                                opportunity.amount_sol,
+                                            )
+                                            .await
+                                        {
                                             warn!("Failed to send Discord profit alert: {}", e);
                                         }
                                     }
@@ -354,19 +433,21 @@ async fn main() -> Result<()> {
 
                                     // Broadcast to dashboard and store in DB
                                     if let Some(ref ws_tx) = websocket_tx {
-                                        let price_update = web::WebSocketMessage::Transaction(web::TransactionRecord {
-                                            id: None,
-                                            timestamp: chrono::Utc::now(),
-                                            signature: signature.to_string(),
-                                            buy_dex: opportunity.buy_dex.clone(),
-                                            sell_dex: opportunity.sell_dex.clone(),
-                                            amount_sol: f64_to_decimal(opportunity.amount_sol),
-                                            profit_usd: f64_to_decimal(actual_profit),
-                                            raydium_price: raydium.unwrap_or(Decimal::ZERO),
-                                            orca_price: orca.unwrap_or(Decimal::ZERO),
-                                            spread_percent: Decimal::ZERO,
-                                            gas_fee: Decimal::ZERO,
-                                        });
+                                        let price_update = web::WebSocketMessage::Transaction(
+                                            web::TransactionRecord {
+                                                id: None,
+                                                timestamp: chrono::Utc::now(),
+                                                signature: signature.to_string(),
+                                                buy_dex: opportunity.buy_dex.clone(),
+                                                sell_dex: opportunity.sell_dex.clone(),
+                                                amount_sol: f64_to_decimal(opportunity.amount_sol),
+                                                profit_usd: f64_to_decimal(actual_profit),
+                                                raydium_price: raydium.unwrap_or(Decimal::ZERO),
+                                                orca_price: orca.unwrap_or(Decimal::ZERO),
+                                                spread_percent: Decimal::ZERO,
+                                                gas_fee: Decimal::ZERO,
+                                            },
+                                        );
                                         let _ = ws_tx.send(price_update);
                                     }
 
@@ -390,22 +471,30 @@ async fn main() -> Result<()> {
                                     }
 
                                     // Record in safety system
-                                    safety.record_trade(
-                                        actual_profit,
-                                        opportunity.amount_sol,
-                                        actual_profit > 0.0
-                                    ).await;
+                                    safety
+                                        .record_trade(
+                                            actual_profit,
+                                            opportunity.amount_sol,
+                                            actual_profit > 0.0,
+                                        )
+                                        .await;
 
-                                    info!("📊 Daily stats: {} trades, ${:.2} profit", *trades, *profit);
+                                    info!(
+                                        "📊 Daily stats: {} trades, ${:.2} profit",
+                                        *trades, *profit
+                                    );
                                 }
                                 Err(e) => {
                                     error!("❌ Transaction verification failed: {}. Assuming gas fee loss.", e);
                                     // Record failure with estimated gas loss
-                                    safety.record_trade(
-                                        -opportunity.estimated_gas_sol * decimal_to_f64(price_r), // Lost gas cost
-                                        opportunity.amount_sol,
-                                        false
-                                    ).await;
+                                    safety
+                                        .record_trade(
+                                            -opportunity.estimated_gas_sol
+                                                * decimal_to_f64(price_r), // Lost gas cost
+                                            opportunity.amount_sol,
+                                            false,
+                                        )
+                                        .await;
                                 }
                             }
                         }
@@ -414,20 +503,22 @@ async fn main() -> Result<()> {
 
                             // Send Discord error alert
                             if let Some(ref discord_alert) = discord {
-                                if let Err(discord_err) = discord_alert.send_error_alert(
-                                    &e.to_string(),
-                                    "Trade Execution"
-                                ).await {
+                                if let Err(discord_err) = discord_alert
+                                    .send_error_alert(&e.to_string(), "Trade Execution")
+                                    .await
+                                {
                                     warn!("Failed to send Discord error alert: {}", discord_err);
                                 }
                             }
 
                             // Record failure
-                            safety.record_trade(
-                                -opportunity.estimated_gas_sol * decimal_to_f64(price_r), // Lost gas cost
-                                opportunity.amount_sol,
-                                false
-                            ).await;
+                            safety
+                                .record_trade(
+                                    -opportunity.estimated_gas_sol * decimal_to_f64(price_r), // Lost gas cost
+                                    opportunity.amount_sol,
+                                    false,
+                                )
+                                .await;
                         }
                     }
                 }
@@ -441,22 +532,23 @@ async fn main() -> Result<()> {
             } else {
                 warn!("⏳ Waiting for Orca price data...");
             }
-            
+
             // Longer wait when no data
             sleep(Duration::from_secs(1)).await;
             continue;
         }
-        
+
         // Status update every minute if no opportunities
         if last_opportunity_time.elapsed() > Duration::from_secs(60) {
-            info!("👀 Monitoring... Last opportunity: {}s ago | Found: {} | Executed: {}",
+            info!(
+                "👀 Monitoring... Last opportunity: {}s ago | Found: {} | Executed: {}",
                 last_opportunity_time.elapsed().as_secs(),
                 opportunities_found,
                 trades_executed
             );
             last_opportunity_time = std::time::Instant::now();
         }
-        
+
         // Small delay to prevent CPU spinning
         sleep(Duration::from_millis(100)).await;
     }
@@ -469,21 +561,25 @@ async fn test_api_connections() -> Result<()> {
         Ok(version) => info!("✅ Solana RPC OK: {}", version.solana_core),
         Err(e) => warn!("⚠️ Solana RPC error: {}", e),
     }
-    
+
     info!("Testing Jupiter API...");
     match monitor::DexMonitor::get_jupiter_quote(
         "So11111111111111111111111111111111111111112",
         "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
         1_000_000_000,
-        50
-    ).await {
+        50,
+    )
+    .await
+    {
         Ok(quote) => {
-            info!("✅ Jupiter API OK: 1 SOL = {} USDC", 
-                quote.out_amount as f64 / 1_000_000.0);
+            info!(
+                "✅ Jupiter API OK: 1 SOL = {} USDC",
+                quote.out_amount as f64 / 1_000_000.0
+            );
         }
         Err(e) => warn!("⚠️ Jupiter API error: {}", e),
     }
-    
+
     info!("API tests completed!");
     Ok(())
 }
@@ -492,7 +588,11 @@ fn load_config(path: &str) -> Result<Config> {
     let settings = config::Config::builder()
         .add_source(config::File::with_name(path))
         // Allow environment overrides, e.g. BOT__WEB__AUTH_TOKEN, BOT__RPC__URL
-        .add_source(config::Environment::with_prefix("BOT").separator("__").try_parsing(true))
+        .add_source(
+            config::Environment::with_prefix("BOT")
+                .separator("__")
+                .try_parsing(true),
+        )
         .build()?;
 
     Ok(settings.try_deserialize()?)

@@ -1,13 +1,14 @@
 //! Historical Data Backtesting for Solana Arbitrage Bot
 //! Tests optimizations against real historical price data
 
-use std::time::Instant;
-use std::collections::HashMap;
-use solana_arbitrage_bot::calculator::{ProfitCalculator, ArbitrageOpportunity, DailyMetrics};
-use solana_arbitrage_bot::{Config, LimitsConfig, ExecutionConfig, RpcConfig, WalletConfig, DexConfig, DexInfo};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-
+use solana_arbitrage_bot::calculator::{ArbitrageOpportunity, DailyMetrics, ProfitCalculator};
+use solana_arbitrage_bot::{
+    Config, DexConfig, DexInfo, ExecutionConfig, LimitsConfig, RpcConfig, WalletConfig,
+};
+use std::collections::HashMap;
+use std::time::Instant;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct HistoricalPriceData {
@@ -85,49 +86,54 @@ fn create_test_config() -> Config {
 fn generate_realistic_historical_data(days: usize) -> Vec<HistoricalPriceData> {
     let mut data = Vec::new();
     let mut rng_state = 12345u64; // Simple PRNG state
-    
+
     let base_price = 150.0;
     let mut current_raydium = base_price;
     let mut current_orca = base_price;
-    
+
     for day in 0..days {
         for hour in 0..24 {
-            for minute in 0..(60/5) { // 5-minute intervals
+            for minute in 0..(60 / 5) {
+                // 5-minute intervals
                 // Simple PRNG (Linear Congruential Generator)
                 rng_state = rng_state.wrapping_mul(1664525).wrapping_add(1013904223);
                 let random1 = (rng_state as f64) / (u64::MAX as f64);
-                
+
                 rng_state = rng_state.wrapping_mul(1664525).wrapping_add(1013904223);
                 let random2 = (rng_state as f64) / (u64::MAX as f64);
-                
+
                 rng_state = rng_state.wrapping_mul(1664525).wrapping_add(1013904223);
                 let random3 = (rng_state as f64) / (u64::MAX as f64);
-                
+
                 // Market volatility patterns
                 let volatility = if hour >= 13 && hour <= 21 { 0.02 } else { 0.01 }; // Higher volatility during US hours
-                
+
                 // Price movements (mean reversion with trend)
                 let trend = (day as f64 * 0.1).sin() * 0.001; // Long-term trend
                 let raydium_change = (random1 - 0.5) * volatility + trend;
                 let orca_change = (random2 - 0.5) * volatility + trend;
-                
+
                 current_raydium *= 1.0 + raydium_change;
                 current_orca *= 1.0 + orca_change;
-                
+
                 // Ensure prices don't drift too far apart (market efficiency)
-                let spread = (current_raydium - current_orca).abs() / ((current_raydium + current_orca) / 2.0);
-                if spread > 0.02 { // Max 2% spread before arbitrage kicks in
+                let spread = (current_raydium - current_orca).abs()
+                    / ((current_raydium + current_orca) / 2.0);
+                if spread > 0.02 {
+                    // Max 2% spread before arbitrage kicks in
                     if current_raydium > current_orca {
                         current_raydium = current_orca * 1.015;
                     } else {
                         current_orca = current_raydium * 1.015;
                     }
                 }
-                
+
                 let timestamp = (day * 24 * 60 + hour * 60 + minute * 5) as u64 * 60; // Unix timestamp
                 let volume = 50000.0 + random3 * 200000.0; // Random volume
-                let spread_percent = ((current_raydium - current_orca).abs() / ((current_raydium + current_orca) / 2.0)) * 100.0;
-                
+                let spread_percent = ((current_raydium - current_orca).abs()
+                    / ((current_raydium + current_orca) / 2.0))
+                    * 100.0;
+
                 data.push(HistoricalPriceData {
                     timestamp,
                     raydium_price: current_raydium,
@@ -138,19 +144,19 @@ fn generate_realistic_historical_data(days: usize) -> Vec<HistoricalPriceData> {
             }
         }
     }
-    
+
     data
 }
 
 fn run_backtest(data: &[HistoricalPriceData], config: &Config) -> BacktestResults {
     println!("🔄 Running backtest on {} data points...", data.len());
-    
+
     let mut calculator = ProfitCalculator::new(config);
     let start_time = Instant::now();
-    
+
     let mut all_opportunities = Vec::new();
     let mut daily_opportunities: HashMap<u32, Vec<ArbitrageOpportunity>> = HashMap::new();
-    
+
     // Process all historical data
     for (i, price_data) in data.iter().enumerate() {
         if let Some(opportunity) = calculator.calculate_opportunity(
@@ -159,56 +165,69 @@ fn run_backtest(data: &[HistoricalPriceData], config: &Config) -> BacktestResult
             10.0, // Max position
         ) {
             let day = (price_data.timestamp / (24 * 60 * 60)) as u32;
-            daily_opportunities.entry(day).or_insert_with(Vec::new).push(opportunity.clone());
+            daily_opportunities
+                .entry(day)
+                .or_insert_with(Vec::new)
+                .push(opportunity.clone());
             all_opportunities.push(opportunity);
         }
-        
+
         if i % 1000 == 0 && i > 0 {
             let progress = (i as f64 / data.len() as f64) * 100.0;
-            println!("  📊 Progress: {:.1}% ({} opportunities found)", progress, all_opportunities.len());
+            println!(
+                "  📊 Progress: {:.1}% ({} opportunities found)",
+                progress,
+                all_opportunities.len()
+            );
         }
     }
-    
+
     let _total_time = start_time.elapsed();
-    
+
     // Calculate metrics
-    let profitable_opportunities = all_opportunities.iter()
+    let profitable_opportunities = all_opportunities
+        .iter()
         .filter(|opp| opp.profit_after_fees_usd > 0.0)
         .count();
-    
-    let total_profit: f64 = all_opportunities.iter()
+
+    let total_profit: f64 = all_opportunities
+        .iter()
         .map(|opp| opp.profit_after_fees_usd)
         .sum();
-    
-    let total_fees: f64 = all_opportunities.iter()
+
+    let total_fees: f64 = all_opportunities
+        .iter()
         .map(|opp| opp.expected_profit_usd - opp.profit_after_fees_usd)
         .sum();
-    
+
     let success_rate = if !all_opportunities.is_empty() {
         profitable_opportunities as f64 / all_opportunities.len() as f64
     } else {
         0.0
     };
-    
+
     let average_profit = if !all_opportunities.is_empty() {
         total_profit / all_opportunities.len() as f64
     } else {
         0.0
     };
-    
-    let max_profit = all_opportunities.iter()
+
+    let max_profit = all_opportunities
+        .iter()
         .map(|opp| opp.profit_after_fees_usd)
         .fold(0.0f64, f64::max);
-    
-    let max_loss = all_opportunities.iter()
+
+    let max_loss = all_opportunities
+        .iter()
         .map(|opp| opp.profit_after_fees_usd)
         .fold(0.0f64, f64::min);
-    
+
     // Calculate daily metrics
-    let daily_metrics: Vec<DailyMetrics> = daily_opportunities.values()
+    let daily_metrics: Vec<DailyMetrics> = daily_opportunities
+        .values()
         .map(|opportunities| calculator.calculate_daily_metrics(opportunities))
         .collect();
-    
+
     // Performance statistics
     let (calc_count, avg_time_ms) = calculator.get_performance_stats();
     let calculations_per_second = if avg_time_ms > 0.0 {
@@ -216,7 +235,7 @@ fn run_backtest(data: &[HistoricalPriceData], config: &Config) -> BacktestResult
     } else {
         0.0
     };
-    
+
     BacktestResults {
         total_opportunities: all_opportunities.len(),
         profitable_opportunities,
@@ -243,18 +262,21 @@ fn calculate_sharpe_ratio(opportunities: &[ArbitrageOpportunity]) -> f64 {
     if opportunities.is_empty() {
         return 0.0;
     }
-    
-    let returns: Vec<f64> = opportunities.iter()
+
+    let returns: Vec<f64> = opportunities
+        .iter()
         .map(|opp| opp.profit_after_fees_usd)
         .collect();
-    
+
     let mean_return = returns.iter().sum::<f64>() / returns.len() as f64;
-    let variance = returns.iter()
+    let variance = returns
+        .iter()
         .map(|r| (r - mean_return).powi(2))
-        .sum::<f64>() / returns.len() as f64;
-    
+        .sum::<f64>()
+        / returns.len() as f64;
+
     let std_dev = variance.sqrt();
-    
+
     if std_dev > 0.0 {
         mean_return / std_dev
     } else {
@@ -266,11 +288,11 @@ fn calculate_max_drawdown(opportunities: &[ArbitrageOpportunity]) -> f64 {
     if opportunities.is_empty() {
         return 0.0;
     }
-    
+
     let mut cumulative_profit = 0.0;
     let mut peak = 0.0;
     let mut max_drawdown = 0.0;
-    
+
     for opp in opportunities {
         cumulative_profit += opp.profit_after_fees_usd;
         if cumulative_profit > peak {
@@ -281,64 +303,79 @@ fn calculate_max_drawdown(opportunities: &[ArbitrageOpportunity]) -> f64 {
             max_drawdown = drawdown;
         }
     }
-    
+
     max_drawdown
 }
 
 fn main() {
     println!("🚀 Solana Arbitrage Bot - Historical Backtest");
     println!("==============================================");
-    
+
     let config = create_test_config();
-    
+
     // Generate test data for different periods
-    let test_periods = vec![
-        (7, "1 Week"),
-        (30, "1 Month"),
-        (90, "3 Months"),
-    ];
-    
+    let test_periods = vec![(7, "1 Week"), (30, "1 Month"), (90, "3 Months")];
+
     for (days, period_name) in test_periods {
         println!("\n📅 Testing Period: {}", period_name);
         println!("{}=", "=".repeat(30));
-        
+
         let historical_data = generate_realistic_historical_data(days);
         println!("📊 Generated {} data points", historical_data.len());
-        
+
         let results = run_backtest(&historical_data, &config);
-        
+
         // Print results
         println!("\n📈 Backtest Results:");
         println!("  🎯 Total Opportunities: {}", results.total_opportunities);
-        println!("  ✅ Profitable Trades: {} ({:.1}%)", 
-                results.profitable_opportunities, 
-                results.success_rate * 100.0);
+        println!(
+            "  ✅ Profitable Trades: {} ({:.1}%)",
+            results.profitable_opportunities,
+            results.success_rate * 100.0
+        );
         println!("  💰 Total Profit: ${:.2}", results.total_profit_usd);
         println!("  💸 Total Fees: ${:.2}", results.total_fees_usd);
-        println!("  📊 Avg Profit/Trade: ${:.4}", results.average_profit_per_trade);
+        println!(
+            "  📊 Avg Profit/Trade: ${:.4}",
+            results.average_profit_per_trade
+        );
         println!("  🏆 Best Trade: ${:.2}", results.max_profit_trade);
         println!("  📉 Worst Trade: ${:.2}", results.max_loss_trade);
         println!("  📈 Sharpe Ratio: {:.2}", results.sharpe_ratio);
         println!("  📉 Max Drawdown: {:.1}%", results.max_drawdown * 100.0);
-        
+
         println!("\n⚡ Performance Stats:");
-        println!("  🔢 Total Calculations: {}", results.performance_stats.total_calculations);
-        println!("  ⏱️  Avg Calc Time: {:.2}μs", 
-                results.performance_stats.average_calculation_time_ns / 1000.0);
-        println!("  🚀 Calculations/sec: {:.0}", results.performance_stats.calculations_per_second);
-        println!("  💾 Memory Efficiency: {:.1}%", results.performance_stats.memory_efficiency_score);
-        
+        println!(
+            "  🔢 Total Calculations: {}",
+            results.performance_stats.total_calculations
+        );
+        println!(
+            "  ⏱️  Avg Calc Time: {:.2}μs",
+            results.performance_stats.average_calculation_time_ns / 1000.0
+        );
+        println!(
+            "  🚀 Calculations/sec: {:.0}",
+            results.performance_stats.calculations_per_second
+        );
+        println!(
+            "  💾 Memory Efficiency: {:.1}%",
+            results.performance_stats.memory_efficiency_score
+        );
+
         // Daily performance summary
         if !results.daily_metrics.is_empty() {
-            let avg_daily_profit: f64 = results.daily_metrics.iter()
+            let avg_daily_profit: f64 = results
+                .daily_metrics
+                .iter()
                 .map(|dm| dm.total_profit_usd)
-                .sum::<f64>() / results.daily_metrics.len() as f64;
-            
+                .sum::<f64>()
+                / results.daily_metrics.len() as f64;
+
             println!("  📅 Avg Daily Profit: ${:.2}", avg_daily_profit);
             println!("  📊 Trading Days: {}", results.daily_metrics.len());
         }
     }
-    
+
     println!("\n✅ Historical backtest completed!");
     println!("\n📋 Summary:");
     println!("- Optimizations validated against historical data");

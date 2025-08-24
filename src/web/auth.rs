@@ -5,8 +5,8 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::Response,
 };
-use tower::{Layer, Service};
 use std::task::{Context, Poll};
+use tower::{Layer, Service};
 
 /// Authentication middleware layer
 #[derive(Clone)]
@@ -45,7 +45,9 @@ where
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+    type Future = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+    >;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
@@ -131,11 +133,17 @@ mod tests {
         assert!(!is_authenticated(&headers, token));
 
         // Test with Bearer token
-        headers.insert("authorization", HeaderValue::from_str(&format!("Bearer {}", token)).unwrap());
+        headers.insert(
+            "authorization",
+            HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
+        );
         assert!(is_authenticated(&headers, token));
 
         // Test with wrong Bearer token
-        headers.insert("authorization", HeaderValue::from_str("Bearer wrong-token").unwrap());
+        headers.insert(
+            "authorization",
+            HeaderValue::from_str("Bearer wrong-token").unwrap(),
+        );
         assert!(!is_authenticated(&headers, token));
 
         // Test with API key

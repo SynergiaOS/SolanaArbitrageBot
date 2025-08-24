@@ -2,41 +2,41 @@
 //! Monitors purchased tokens for suspicious activity and emergency sells
 
 use crate::sniper::{NewToken, Position};
-use anyhow::{Result, anyhow};
-use log::{info, warn, error, debug};
+use anyhow::{anyhow, Result};
+use chrono::{DateTime, Duration, Utc};
+use log::{debug, error, info, warn};
 use reqwest::Client;
-use solana_sdk::pubkey::Pubkey;
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_account_decoder::UiAccountEncoding;
-use solana_client::rpc_config::RpcAccountInfoConfig;
-use spl_token::state::Mint;
-use solana_sdk::commitment_config::CommitmentConfig;
-use solana_program_pack::Pack;
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::RwLock;
-use chrono::{DateTime, Utc, Duration};
 use serde_json;
+use solana_account_decoder::UiAccountEncoding;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_client::rpc_config::RpcAccountInfoConfig;
+use solana_program_pack::Pack;
+use solana_sdk::commitment_config::CommitmentConfig;
+use solana_sdk::pubkey::Pubkey;
+use spl_token::state::Mint;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[derive(Debug, Clone)]
 pub struct RugMonitorConfig {
     pub enable_monitoring: bool,
-    pub liquidity_drop_threshold: f64,    // % drop in liquidity to trigger sell
-    pub authority_change_timeout: u64,    // seconds to wait before selling on authority change
-    pub tax_increase_threshold: f64,      // % increase in taxes to trigger sell
+    pub liquidity_drop_threshold: f64, // % drop in liquidity to trigger sell
+    pub authority_change_timeout: u64, // seconds to wait before selling on authority change
+    pub tax_increase_threshold: f64,   // % increase in taxes to trigger sell
     pub monitoring_duration_minutes: u64, // how long to monitor each position
-    pub check_interval_seconds: u64,      // how often to check positions
+    pub check_interval_seconds: u64,   // how often to check positions
 }
 
 impl Default for RugMonitorConfig {
     fn default() -> Self {
         Self {
             enable_monitoring: true,
-            liquidity_drop_threshold: 30.0,    // 30% drop triggers emergency sell
-            authority_change_timeout: 10,      // 10 seconds to react to authority changes
-            tax_increase_threshold: 50.0,      // 50% tax increase triggers sell
-            monitoring_duration_minutes: 60,   // Monitor for 1 hour
-            check_interval_seconds: 5,         // Check every 5 seconds
+            liquidity_drop_threshold: 30.0, // 30% drop triggers emergency sell
+            authority_change_timeout: 10,   // 10 seconds to react to authority changes
+            tax_increase_threshold: 50.0,   // 50% tax increase triggers sell
+            monitoring_duration_minutes: 60, // Monitor for 1 hour
+            check_interval_seconds: 5,      // Check every 5 seconds
         }
     }
 }
@@ -54,10 +54,24 @@ pub struct MonitoredPosition {
 
 #[derive(Debug)]
 pub enum RugAlert {
-    LiquidityDrain { old_liq: u64, new_liq: u64, drop_percent: f64 },
-    AuthorityChanged { old_auth: Option<Pubkey>, new_auth: Option<Pubkey> },
-    TaxIncreased { old_buy: f64, new_buy: f64, old_sell: f64, new_sell: f64 },
-    FailedTransaction { error: String },
+    LiquidityDrain {
+        old_liq: u64,
+        new_liq: u64,
+        drop_percent: f64,
+    },
+    AuthorityChanged {
+        old_auth: Option<Pubkey>,
+        new_auth: Option<Pubkey>,
+    },
+    TaxIncreased {
+        old_buy: f64,
+        new_buy: f64,
+        old_sell: f64,
+        new_sell: f64,
+    },
+    FailedTransaction {
+        error: String,
+    },
 }
 
 pub struct RugMonitor {
@@ -84,7 +98,10 @@ impl RugMonitor {
     /// Start monitoring a new position
     pub async fn start_monitoring(&self, position: Position, token_data: NewToken) -> Result<()> {
         if !self.config.enable_monitoring {
-            debug!("Rug monitoring disabled, skipping position: {}", position.mint);
+            debug!(
+                "Rug monitoring disabled, skipping position: {}",
+                position.mint
+            );
             return Ok(());
         }
 
@@ -101,8 +118,10 @@ impl RugMonitor {
         let mut positions = self.monitored_positions.write().await;
         positions.insert(position.mint, monitored);
 
-        info!("🛡️ Started monitoring position: {} for {} tokens",
-              position.mint, position.token_amount);
+        info!(
+            "🛡️ Started monitoring position: {} for {} tokens",
+            position.mint, position.token_amount
+        );
 
         Ok(())
     }
@@ -190,7 +209,9 @@ impl RugMonitor {
 
         // Calculate liquidity drop percentage
         let drop_percent = if position.last_liquidity > 0 {
-            ((position.last_liquidity as f64 - current_liquidity as f64) / position.last_liquidity as f64) * 100.0
+            ((position.last_liquidity as f64 - current_liquidity as f64)
+                / position.last_liquidity as f64)
+                * 100.0
         } else {
             0.0
         };
@@ -205,8 +226,10 @@ impl RugMonitor {
 
         // Check if drop exceeds threshold
         if drop_percent >= self.config.liquidity_drop_threshold {
-            warn!("🚨 LIQUIDITY DRAIN DETECTED: {} - Drop: {:.1}% ({} -> {})",
-                  position.position.mint, drop_percent, position.last_liquidity, current_liquidity);
+            warn!(
+                "🚨 LIQUIDITY DRAIN DETECTED: {} - Drop: {:.1}% ({} -> {})",
+                position.position.mint, drop_percent, position.last_liquidity, current_liquidity
+            );
 
             return Ok(RugAlert::LiquidityDrain {
                 old_liq: position.last_liquidity,
@@ -225,24 +248,29 @@ impl RugMonitor {
     /// Check for authority changes (rug pull indicator)
     async fn check_authority_changes(&self, position: &MonitoredPosition) -> Result<RugAlert> {
         // Get current mint authorities
-        let mint_account = self.rpc_client
+        let mint_account = self
+            .rpc_client
             .get_account_with_config(
                 &position.position.mint,
                 RpcAccountInfoConfig {
                     encoding: Some(UiAccountEncoding::Base64),
                     ..Default::default()
-                }
+                },
             )
             .await?;
 
-        let account = mint_account.value.ok_or_else(|| anyhow!("Mint account not found"))?;
+        let account = mint_account
+            .value
+            .ok_or_else(|| anyhow!("Mint account not found"))?;
         let mint_data = Mint::unpack(&account.data)?;
 
         // For simplicity, we'll check if freeze authority exists and is suspicious
         // In a real implementation, you'd compare against known good authorities
         if mint_data.freeze_authority.is_some() {
-            warn!("⚠️ FREEZE AUTHORITY DETECTED: {} - This could be used for rug pull!",
-                  position.position.mint);
+            warn!(
+                "⚠️ FREEZE AUTHORITY DETECTED: {} - This could be used for rug pull!",
+                position.position.mint
+            );
 
             return Ok(RugAlert::AuthorityChanged {
                 old_auth: None, // We don't have historical data
@@ -256,7 +284,8 @@ impl RugMonitor {
     /// Check for tax increases (rug pull indicator)
     async fn check_tax_changes(&self, position: &MonitoredPosition) -> Result<RugAlert> {
         // Get current taxes
-        let (current_buy_tax, current_sell_tax) = self.get_token_taxes(&position.position.mint).await?;
+        let (current_buy_tax, current_sell_tax) =
+            self.get_token_taxes(&position.position.mint).await?;
 
         // If this is the first check, store the taxes and return
         if position.initial_buy_tax == 0.0 && position.initial_sell_tax == 0.0 {
@@ -282,10 +311,17 @@ impl RugMonitor {
         };
 
         // Check if increases exceed threshold
-        if buy_increase >= self.config.tax_increase_threshold ||
-           sell_increase >= self.config.tax_increase_threshold {
-            warn!("🚨 TAX INCREASE DETECTED: {} - Buy: {:.1}% (+{:.1}%), Sell: {:.1}% (+{:.1}%)",
-                  position.position.mint, current_buy_tax, buy_increase, current_sell_tax, sell_increase);
+        if buy_increase >= self.config.tax_increase_threshold
+            || sell_increase >= self.config.tax_increase_threshold
+        {
+            warn!(
+                "🚨 TAX INCREASE DETECTED: {} - Buy: {:.1}% (+{:.1}%), Sell: {:.1}% (+{:.1}%)",
+                position.position.mint,
+                current_buy_tax,
+                buy_increase,
+                current_sell_tax,
+                sell_increase
+            );
 
             return Ok(RugAlert::TaxIncreased {
                 old_buy: position.initial_buy_tax,
@@ -333,7 +369,10 @@ impl RugMonitor {
 
         // Here you would integrate with the trade executor to sell the position
         // For now, just log the emergency action
-        error!("🚨 EMERGENCY SELL EXECUTED: {} - All tokens sold at market price", mint);
+        error!(
+            "🚨 EMERGENCY SELL EXECUTED: {} - All tokens sold at market price",
+            mint
+        );
 
         Ok(())
     }

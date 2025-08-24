@@ -7,6 +7,24 @@
   --panel: #0f141b;
   --border: #1b2633;
   --primary: #10b981; /* emerald */
+
+  /* Enhanced theme variables */
+  --card: #0f141b;
+  --card-foreground: #e5e7eb;
+  --popover: #0f141b;
+  --popover-foreground: #e5e7eb;
+  --primary-foreground: #0b0f14;
+  --secondary: #1b2633;
+  --secondary-foreground: #e5e7eb;
+  --muted: #1b2633;
+  --muted-foreground: #9ca3af;
+  --accent: #1b2633;
+  --accent-foreground: #e5e7eb;
+  --destructive: #ef4444;
+  --destructive-foreground: #fef2f2;
+  --input: #1b2633;
+  --ring: #10b981;
+  --radius: 0.5rem;
 }
 
 @theme inline {
@@ -25,10 +43,34 @@ body {
 }
 
 /***** helpers *****/
-..card {
+.card {
   background: color-mix(in oklab, var(--panel), #0b0f14 60%);
   border: 1px solid var(--border);
   border-radius: 16px;
   backdrop-filter: saturate(120%) blur(6px);
   box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+}
+
+/* Light theme support */
+.light {
+  --background: #ffffff;
+  --foreground: #0b0f14;
+  --panel: #f8fafc;
+  --border: #e2e8f0;
+  --primary: #10b981;
+  --card: #ffffff;
+  --card-foreground: #0b0f14;
+  --popover: #ffffff;
+  --popover-foreground: #0b0f14;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+  --destructive: #ef4444;
+  --destructive-foreground: #fef2f2;
+  --input: #f1f5f9;
+  --ring: #10b981;
 }

@@ -8,23 +8,19 @@ use axum::{
     response::Response,
 };
 use futures_util::{sink::SinkExt, stream::StreamExt};
-use log::{info, warn, error};
+use log::{error, info, warn};
 use tokio::time::{interval, Duration};
 
-use super::{
-    server::AppState,
-    WebSocketMessage,
-};
+use super::{server::AppState, WebSocketMessage};
 
 /// WebSocket upgrade handler
-pub async fn websocket_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-) -> Response {
+pub async fn websocket_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {
     // Discord alert for dashboard connection
     if let Some(discord) = state.discord.clone() {
         tokio::spawn(async move {
-            let _ = discord.send_dashboard_status("connected", "A dashboard client connected").await;
+            let _ = discord
+                .send_dashboard_status("connected", "A dashboard client connected")
+                .await;
         });
     }
     ws.on_upgrade(|socket| websocket_connection(socket, state))
@@ -131,14 +127,18 @@ async fn websocket_connection(socket: WebSocket, state: AppState) {
 
     // Discord alert for disconnect
     if let Some(ref discord) = state.discord {
-        let _ = discord.send_dashboard_status("disconnected", "A dashboard client disconnected").await;
+        let _ = discord
+            .send_dashboard_status("disconnected", "A dashboard client disconnected")
+            .await;
     }
     info!("🔌 WebSocket connection closed");
 }
 
 /// Send initial status to newly connected client
 async fn send_initial_status(
-    sender: &std::sync::Arc<tokio::sync::Mutex<futures_util::stream::SplitSink<WebSocket, Message>>>,
+    sender: &std::sync::Arc<
+        tokio::sync::Mutex<futures_util::stream::SplitSink<WebSocket, Message>>,
+    >,
     state: &AppState,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Send current bot status
@@ -150,7 +150,11 @@ async fn send_initial_status(
 
     let status = super::BotStatus {
         running: bot_running,
-        mode: if cfg!(debug_assertions) { "DRY_RUN".to_string() } else { "LIVE".to_string() },
+        mode: if cfg!(debug_assertions) {
+            "DRY_RUN".to_string()
+        } else {
+            "LIVE".to_string()
+        },
         uptime_seconds: state.bot_start_time.elapsed().as_secs(),
         last_update: chrono::Utc::now(),
         raydium_price,

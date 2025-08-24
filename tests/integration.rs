@@ -54,34 +54,33 @@ async fn test_real_raydium_price_fetch() -> Result<()> {
 
     let raydium_price = Arc::new(Mutex::new(None));
     let orca_price = Arc::new(Mutex::new(None));
-    
-    let monitor = monitor::DexMonitor::new(
-        raydium_price.clone(),
-        orca_price.clone(),
-        &config,
-    )?;
-    
+
+    let monitor = monitor::DexMonitor::new(raydium_price.clone(), orca_price.clone(), &config)?;
+
     // Start monitoring in background
     let monitor_handle = tokio::spawn(async move {
         let _ = monitor.start_monitoring().await;
     });
-    
+
     // Wait a bit for prices to come in
     tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-    
+
     // Check if we got prices
     let ray_price = *raydium_price.lock().await;
     let orca_price_val = *orca_price.lock().await;
-    
+
     println!("Raydium price: {:?}", ray_price);
     println!("Orca price: {:?}", orca_price_val);
-    
+
     // Cancel monitor
     monitor_handle.abort();
-    
+
     // We should have at least one price
-    assert!(ray_price.is_some() || orca_price_val.is_some(), "Should have received at least one price update");
-    
+    assert!(
+        ray_price.is_some() || orca_price_val.is_some(),
+        "Should have received at least one price update"
+    );
+
     if let Some(price) = ray_price {
         // Decimal sanity check converted to f64 for test output only
         let p = price.to_f64().unwrap_or(0.0);
@@ -110,7 +109,8 @@ async fn test_jupiter_quote_api() -> Result<()> {
     match monitor::DexMonitor::get_jupiter_quote(sol_mint, usdc_mint, amount, 50).await {
         Ok(quote) => {
             println!("✅ Jupiter API works!");
-            println!("Quote: {} SOL = {} USDC",
+            println!(
+                "Quote: {} SOL = {} USDC",
                 quote.in_amount as f64 / 1e9,
                 quote.out_amount as f64 / 1e6
             );
@@ -119,9 +119,14 @@ async fn test_jupiter_quote_api() -> Result<()> {
             assert!(quote.out_amount > 0, "Should have non-zero output");
 
             // Check route
-            println!("Route: {:?}", quote.market_infos.iter()
-                .map(|m| &m.label)
-                .collect::<Vec<_>>());
+            println!(
+                "Route: {:?}",
+                quote
+                    .market_infos
+                    .iter()
+                    .map(|m| &m.label)
+                    .collect::<Vec<_>>()
+            );
         }
         Err(e) => {
             // It's ok if this fails in CI/CD or without API key
@@ -172,10 +177,10 @@ async fn test_arbitrage_detection() -> Result<()> {
 #[ignore] // This test requires a real wallet file
 async fn test_transaction_simulation() -> Result<()> {
     println!("Testing transaction simulation...");
-    
+
     let config = test_config();
     let executor = executor::TransactionExecutor::new(&config, true)?; // dry_run = true
-    
+
     let opportunity = calculator::ArbitrageOpportunity {
         buy_dex: "Raydium".to_string(),
         sell_dex: "Orca".to_string(),
@@ -189,7 +194,7 @@ async fn test_transaction_simulation() -> Result<()> {
         price_impact: 0.01,
         confidence_score: 0.7,
     };
-    
+
     match executor.execute_arbitrage(&opportunity).await {
         Ok(sig) => {
             println!("✅ Transaction simulation successful!");
@@ -200,7 +205,7 @@ async fn test_transaction_simulation() -> Result<()> {
             // This is expected without a real wallet
         }
     }
-    
+
     Ok(())
 }
 
@@ -245,4 +250,6 @@ fn test_config() -> Config {
 }
 
 // Re-export types for tests
-use solana_arbitrage_bot::{Config, RpcConfig, WalletConfig, DexConfig, DexInfo, LimitsConfig, ExecutionConfig};
+use solana_arbitrage_bot::{
+    Config, DexConfig, DexInfo, ExecutionConfig, LimitsConfig, RpcConfig, WalletConfig,
+};

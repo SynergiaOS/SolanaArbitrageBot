@@ -1,18 +1,15 @@
 //! DEX Price Monitor - Optimized for High-Frequency Updates
 //! Real-time monitoring with WebSocket, caching, and concurrent fetching
 
-use anyhow::{Result, Context};
-use log::{info, debug, error, warn};
-use rust_decimal::Decimal;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use serde::{Deserialize, Serialize};
-use solana_client::rpc_client::RpcClient;
 use crate::utils::conversions::*;
-use solana_sdk::pubkey::Pubkey;
-use std::str::FromStr;
-use std::time::{Duration, Instant};
+use anyhow::{Context, Result};
+use log::{error, info};
+use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
 use tokio::time::interval;
 
 // Pool addresses will be loaded from config
@@ -88,7 +85,7 @@ impl DexMonitor {
             total_fetch_time_ms: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         })
     }
-    
+
     pub fn with_price_channel(mut self, tx: tokio::sync::mpsc::Sender<PriceUpdate>) -> Self {
         self.price_updates_tx = Some(tx);
         self
@@ -97,7 +94,9 @@ impl DexMonitor {
     /// Get performance statistics
     pub fn get_performance_stats(&self) -> (u64, f64) {
         let fetches = self.fetch_count.load(std::sync::atomic::Ordering::Relaxed);
-        let total_time = self.total_fetch_time_ms.load(std::sync::atomic::Ordering::Relaxed);
+        let total_time = self
+            .total_fetch_time_ms
+            .load(std::sync::atomic::Ordering::Relaxed);
 
         let avg_time_ms = if fetches > 0 {
             total_time as f64 / fetches as f64
@@ -107,7 +106,7 @@ impl DexMonitor {
 
         (fetches, avg_time_ms)
     }
-    
+
     pub async fn start_monitoring(self) -> Result<()> {
         info!("🚀 Starting optimized DEX monitoring...");
 
@@ -140,8 +139,9 @@ impl DexMonitor {
                 fetch_count1,
                 total_fetch_time_ms1,
                 price_tx1,
-                raydium_pool
-            ).await
+                raydium_pool,
+            )
+            .await
         });
 
         let orca_handle = tokio::spawn(async move {
@@ -153,8 +153,9 @@ impl DexMonitor {
                 fetch_count2,
                 total_fetch_time_ms2,
                 price_tx2,
-                orca_pool
-            ).await
+                orca_pool,
+            )
+            .await
         });
 
         // Wait for both (they run forever unless error)
@@ -169,7 +170,7 @@ impl DexMonitor {
 
         Ok(())
     }
-    
+
     async fn monitor_raydium_optimized(
         price_state: Arc<Mutex<Option<Decimal>>>,
         http_client: reqwest::Client,
@@ -210,7 +211,8 @@ impl DexMonitor {
             };
 
             if should_fetch {
-                if let Ok(price) = Self::fetch_raydium_price_fast(&http_client, &pool_address).await {
+                if let Ok(price) = Self::fetch_raydium_price_fast(&http_client, &pool_address).await
+                {
                     // Update cache
                     let mut cache = price_cache.lock().await;
                     cache.insert(cache_key, (price, Instant::now()));
@@ -241,12 +243,15 @@ impl DexMonitor {
             total_fetch_time_ms.fetch_add(elapsed, std::sync::atomic::Ordering::Relaxed);
         }
     }
-    
+
     async fn fetch_raydium_price_fast(
         http_client: &reqwest::Client,
         pool_address: &str,
     ) -> Result<Decimal> {
-        let api_url = format!("https://api.geckoterminal.com/api/v2/networks/solana/pools/{}", pool_address);
+        let api_url = format!(
+            "https://api.geckoterminal.com/api/v2/networks/solana/pools/{}",
+            pool_address
+        );
 
         let response = http_client
             .get(&api_url)
@@ -341,7 +346,10 @@ impl DexMonitor {
         http_client: &reqwest::Client,
         pool_address: &str,
     ) -> Result<Decimal> {
-        let api_url = format!("https://api.geckoterminal.com/api/v2/networks/solana/pools/{}", pool_address);
+        let api_url = format!(
+            "https://api.geckoterminal.com/api/v2/networks/solana/pools/{}",
+            pool_address
+        );
 
         let response = http_client
             .get(&api_url)
@@ -359,11 +367,7 @@ impl DexMonitor {
 
         Err(anyhow::anyhow!("Failed to parse price from API response"))
     }
-    
 
-    
-
-    
     // Helper function to fetch pool info via HTTP API (backup method)
     pub async fn fetch_pool_stats(&self) -> Result<(f64, f64)> {
         // This would connect to Raydium/Orca HTTP APIs for additional data
@@ -411,16 +415,18 @@ impl DexMonitor {
             "https://quote-api.jup.ag/v6/quote?inputMint={}&outputMint={}&amount={}&slippageBps={}",
             input_mint, output_mint, amount, slippage_bps
         );
-        
-        let response = client.get(&url)
+
+        let response = client
+            .get(&url)
             .send()
             .await
             .context("Failed to fetch Jupiter quote")?;
-        
-        let quote: JupiterQuote = response.json()
+
+        let quote: JupiterQuote = response
+            .json()
             .await
             .context("Failed to parse Jupiter quote")?;
-        
+
         Ok(quote)
     }
 }
@@ -428,17 +434,18 @@ impl DexMonitor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_jupiter_quote() {
         // Test fetching a real quote from Jupiter
         let sol_mint = "So11111111111111111111111111111111111111112";
         let usdc_mint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
         let amount = 1_000_000_000; // 1 SOL
-        
+
         match DexMonitor::get_jupiter_quote(sol_mint, usdc_mint, amount, 50).await {
             Ok(quote) => {
-                println!("Jupiter quote: {} SOL = {} USDC", 
+                println!(
+                    "Jupiter quote: {} SOL = {} USDC",
                     quote.in_amount as f64 / 1e9,
                     quote.out_amount as f64 / 1e6
                 );

@@ -1,20 +1,25 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { 
-  Wifi, 
-  WifiOff, 
-  Bell, 
-  User, 
+import { useWebSocket } from "@/components/providers/websocket-provider";
+import { WalletStatus } from "@/components/wallet/WalletButton";
+import {
+  Wifi,
+  WifiOff,
+  Bell,
+  User,
   ChevronDown,
   Activity
 } from "lucide-react";
 
 export function TopHeader() {
-  const [connected, setConnected] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const { isConnected, systemHealth } = useWebSocket();
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+    setCurrentTime(new Date());
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
@@ -42,21 +47,36 @@ export function TopHeader() {
         
         {/* Connection status */}
         <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm ${
-          connected 
-            ? 'bg-emerald-900/50 text-emerald-200 border border-emerald-700/50' 
+          isConnected
+            ? 'bg-emerald-900/50 text-emerald-200 border border-emerald-700/50'
             : 'bg-rose-900/50 text-rose-200 border border-rose-700/50'
         }`}>
-          {connected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
-          {connected ? 'Connected' : 'Disconnected'}
+          {isConnected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
+          {isConnected ? 'Connected' : 'Disconnected'}
         </div>
       </div>
 
       {/* Right section */}
       <div className="flex items-center gap-4">
         {/* Current time */}
-        <div className="text-sm text-gray-400">
-          {currentTime.toLocaleTimeString()}
+        <div className="text-sm text-gray-400" suppressHydrationWarning>
+          {mounted && currentTime ? currentTime.toLocaleTimeString() : '--:--:--'}
         </div>
+
+
+
+        {/* Wallet Status */}
+        <WalletStatus />
+
+        {/* System Health */}
+        {systemHealth && (
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-blue-400" />
+            <span className="text-sm text-gray-400">
+              Bot: {systemHealth.walletBalance.toFixed(2)} SOL
+            </span>
+          </div>
+        )}
 
         {/* Notifications */}
         <button className="p-2 rounded-lg hover:bg-white/5 transition-colors relative">

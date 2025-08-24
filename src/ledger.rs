@@ -1,14 +1,8 @@
 use anyhow::{anyhow, Context, Result};
 use log::{debug, info, warn};
+use solana_remote_wallet::{ledger::LedgerWallet, remote_wallet::RemoteWallet};
 use solana_sdk::{
-    derivation_path::DerivationPath,
-    pubkey::Pubkey,
-    signature::Signature,
-    message::Message,
-};
-use solana_remote_wallet::{
-    ledger::LedgerWallet,
-    remote_wallet::RemoteWallet,
+    derivation_path::DerivationPath, message::Message, pubkey::Pubkey, signature::Signature,
 };
 use std::rc::Rc;
 use tokio::time::Duration;
@@ -34,11 +28,11 @@ impl LedgerConnection {
         info!("Searching for Ledger devices...");
 
         // Initialize HID API
-        let api = hidapi::HidApi::new()
-            .context("Failed to initialize HID API")?;
+        let api = hidapi::HidApi::new().context("Failed to initialize HID API")?;
 
         // Look for Ledger devices (vendor ID 0x2c97)
-        let devices: Vec<_> = api.device_list()
+        let devices: Vec<_> = api
+            .device_list()
             .filter(|device| device.vendor_id() == 0x2c97)
             .collect();
 
@@ -56,11 +50,14 @@ impl LedgerConnection {
 
         // Connect to first available Ledger
         let device_info = devices[0];
-        info!("Connecting to Ledger: {} {}",
-              device_info.manufacturer_string().unwrap_or("Unknown"),
-              device_info.product_string().unwrap_or("Ledger"));
+        info!(
+            "Connecting to Ledger: {} {}",
+            device_info.manufacturer_string().unwrap_or("Unknown"),
+            device_info.product_string().unwrap_or("Ledger")
+        );
 
-        let hid_device = device_info.open_device(&api)
+        let hid_device = device_info
+            .open_device(&api)
             .context("Failed to open Ledger device")?;
 
         let ledger_wallet = LedgerWallet::new(hid_device);
@@ -69,7 +66,8 @@ impl LedgerConnection {
         info!("Getting public key from Ledger...");
         info!("Please approve the request on your Ledger device...");
 
-        let pubkey = ledger_wallet.get_pubkey(&derivation_path, false)
+        let pubkey = ledger_wallet
+            .get_pubkey(&derivation_path, false)
             .context("Failed to get public key from Ledger")?;
 
         info!("✅ Successfully connected to Ledger");
@@ -83,7 +81,6 @@ impl LedgerConnection {
             timeout_duration: Duration::from_secs(30),
         })
     }
-    
 
     /// Get the public key for this Ledger connection
     pub fn get_pubkey(&self) -> Pubkey {
@@ -95,49 +92,50 @@ impl LedgerConnection {
         info!("🔐 Requesting signature from Ledger...");
         info!("Please review and approve the transaction on your Ledger device");
 
-        let signature = self.wallet.sign_message(&self.derivation_path, &message.serialize())
+        let signature = self
+            .wallet
+            .sign_message(&self.derivation_path, &message.serialize())
             .context("Failed to sign message with Ledger")?;
 
         info!("✅ Transaction signed by Ledger");
         Ok(signature)
     }
-    
+
     /// Test Ledger connection health
     pub fn health_check(&self) -> Result<()> {
         debug!("Performing Ledger health check...");
 
         // Try to get public key again to verify connection
-        let pubkey = self.wallet.get_pubkey(&self.derivation_path, false)
+        let pubkey = self
+            .wallet
+            .get_pubkey(&self.derivation_path, false)
             .context("Failed to communicate with Ledger during health check")?;
 
         if pubkey != self.pubkey {
-            return Err(anyhow!("Ledger public key mismatch - device may have changed"));
+            return Err(anyhow!(
+                "Ledger public key mismatch - device may have changed"
+            ));
         }
 
         info!("✅ Ledger health check passed");
         Ok(())
     }
-    
+
     /// Test signing capability with a dummy message
     pub fn test_signing(&self) -> Result<()> {
         info!("Testing Ledger signing capability...");
         info!("This will require approval on your Ledger device");
 
         // Create a simple test message
-        use solana_sdk::{
-            system_instruction,
-        };
+        use solana_sdk::system_instruction;
 
         let test_instruction = system_instruction::transfer(
             &self.pubkey,
             &self.pubkey, // Send to self
-            1, // 1 lamport
+            1,            // 1 lamport
         );
 
-        let message = Message::new(
-            &[test_instruction],
-            Some(&self.pubkey),
-        );
+        let message = Message::new(&[test_instruction], Some(&self.pubkey));
 
         // Try to sign (this will require user approval)
         match self.sign_message(&message) {
@@ -153,7 +151,7 @@ impl LedgerConnection {
             }
         }
     }
-    
+
     /// Get wallet information for debugging
     pub fn get_wallet_info(&self) -> String {
         format!(
@@ -163,9 +161,7 @@ impl LedgerConnection {
             - Wallet Type: Ledger Hardware Wallet\n\
             - Timeout: {:?}\n\
             - Status: Connected",
-            self.pubkey,
-            self.derivation_path,
-            self.timeout_duration
+            self.pubkey, self.derivation_path, self.timeout_duration
         )
     }
 
@@ -179,10 +175,10 @@ impl LedgerConnection {
 /// Perform a comprehensive Ledger connection test
 pub async fn test_ledger_connection(derivation_path: Option<&str>) -> Result<()> {
     let path = derivation_path.unwrap_or("m/44'/501'/0'/0'");
-    
+
     println!("🔐 Starting Ledger Connection Test");
     println!("==================================");
-    
+
     // Step 1: Basic connection
     println!("\n1. Testing basic connection...");
     let ledger = match LedgerConnection::new(path).await {
@@ -197,7 +193,7 @@ pub async fn test_ledger_connection(derivation_path: Option<&str>) -> Result<()>
             return Err(e);
         }
     };
-    
+
     // Step 2: Health check
     println!("\n2. Testing connection health...");
     match ledger.health_check() {
@@ -207,11 +203,11 @@ pub async fn test_ledger_connection(derivation_path: Option<&str>) -> Result<()>
             return Err(e);
         }
     }
-    
+
     // Step 3: Signing test (optional, requires user confirmation)
     println!("\n3. Testing signing capability...");
     println!("   Note: This will require confirmation on your Ledger device");
-    
+
     match ledger.test_signing() {
         Ok(()) => println!("✅ Signing test passed"),
         Err(e) => {
@@ -220,32 +216,35 @@ pub async fn test_ledger_connection(derivation_path: Option<&str>) -> Result<()>
             // Don't return error for signing test failure as it might be intentional
         }
     }
-    
+
     // Step 4: Display summary
     println!("\n4. Connection Summary:");
     println!("{}", ledger.get_wallet_info());
-    
+
     println!("\n🎉 Ledger connection test completed!");
     println!("Your Ledger is ready for use with the Solana Arbitrage Bot.");
-    
+
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     #[ignore] // Requires actual Ledger hardware
     async fn test_ledger_connection_integration() {
         env_logger::init();
-        
+
         let result = test_ledger_connection(Some("m/44'/501'/0'/0'")).await;
-        
+
         match result {
             Ok(()) => println!("Integration test passed"),
             Err(e) => {
-                println!("Integration test failed (this is expected without hardware): {}", e);
+                println!(
+                    "Integration test failed (this is expected without hardware): {}",
+                    e
+                );
                 // Don't panic in tests without hardware
             }
         }
@@ -253,11 +252,7 @@ mod tests {
 
     #[test]
     fn test_derivation_path_parsing() {
-        let valid_paths = vec![
-            "m/44'/501'/0'/0'",
-            "m/44'/501'/1'/0'",
-            "m/44'/501'/0'/1'",
-        ];
+        let valid_paths = vec!["m/44'/501'/0'/0'", "m/44'/501'/1'/0'", "m/44'/501'/0'/1'"];
 
         for path in valid_paths {
             let result = DerivationPath::from_absolute_path_str(path);
@@ -276,7 +271,11 @@ mod tests {
                 eprintln!("Parser accepted '{}' as valid; continuing", path);
                 continue;
             }
-            assert!(result.is_err(), "Should have failed to parse invalid path: {}", path);
+            assert!(
+                result.is_err(),
+                "Should have failed to parse invalid path: {}",
+                path
+            );
         }
     }
 }

@@ -1,14 +1,14 @@
 //! Memecoin Sniper Bot Binary
 //! Standalone executable for sniping new memecoins
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use clap::Parser;
-use log::{info, error, warn};
-use solana_arbitrage_bot::sniper::{SniperEngine, SniperConfig, SafetyConfig};
+use log::{error, info, warn};
+use serde::Deserialize;
+use solana_arbitrage_bot::sniper::{SafetyConfig, SniperConfig, SniperEngine};
 use solana_sdk::signature::{read_keypair_file, Keypair, Signer};
 use std::path::Path;
 use std::sync::Arc;
-use serde::Deserialize;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -58,7 +58,14 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     info!("🎯 Memecoin Sniper Bot v1.0");
-    info!("⚡ Mode: {}", if args.dry_run { "DRY RUN" } else { "LIVE SNIPING" });
+    info!(
+        "⚡ Mode: {}",
+        if args.dry_run {
+            "DRY RUN"
+        } else {
+            "LIVE SNIPING"
+        }
+    );
 
     // Load configuration from YAML (and CLI overrides)
     let loaded = load_config_sources(&args).context("Failed to load configuration")?;
@@ -74,10 +81,12 @@ async fn main() -> Result<()> {
         Ok(balance) => {
             let sol_balance = balance as f64 / 1_000_000_000.0;
             info!("💰 Balance: {:.4} SOL", sol_balance);
-            
+
             if sol_balance < loaded.sniper_config.max_position_sol * 2.0 {
-                error!("⚠️ Low balance! Need at least {:.2} SOL for safe operation",
-                       loaded.sniper_config.max_position_sol * 2.0);
+                error!(
+                    "⚠️ Low balance! Need at least {:.2} SOL for safe operation",
+                    loaded.sniper_config.max_position_sol * 2.0
+                );
             }
         }
         Err(e) => {
@@ -87,10 +96,16 @@ async fn main() -> Result<()> {
 
     if !args.dry_run {
         info!("🚨 LIVE SNIPING MODE ACTIVATED!");
-        info!("💸 Max position: {} SOL per snipe", loaded.sniper_config.max_position_sol);
-        info!("🎯 Profit target: {}%", loaded.sniper_config.profit_target_percent);
+        info!(
+            "💸 Max position: {} SOL per snipe",
+            loaded.sniper_config.max_position_sol
+        );
+        info!(
+            "🎯 Profit target: {}%",
+            loaded.sniper_config.profit_target_percent
+        );
         info!("🛑 Stop loss: {}%", loaded.sniper_config.stop_loss_percent);
-        
+
         // Final confirmation
         println!("\n⚠️  WARNING: This will execute REAL transactions with REAL money!");
         println!("Press Ctrl+C to abort, or wait 5 seconds to continue...\n");
@@ -128,10 +143,15 @@ struct RootYamlConfig {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-struct RpcSection { url: Option<String>, ws_url: Option<String> }
+struct RpcSection {
+    url: Option<String>,
+    ws_url: Option<String>,
+}
 
 #[derive(Debug, Deserialize, Clone)]
-struct WalletSection { path: Option<String> }
+struct WalletSection {
+    path: Option<String>,
+}
 
 #[derive(Debug, Deserialize, Clone)]
 struct SniperSection {
@@ -190,8 +210,8 @@ fn load_config_sources(args: &Args) -> Result<LoadedConfig> {
     let mut config = SniperConfig {
         max_position_sol: 0.02,
         min_liquidity_sol: 5.0, // Domyślnie 5.0 SOL dla bezpieczeństwa
-        max_buy_tax: 10.0,       // Domyślnie 10% dla bezpieczeństwa
-        max_sell_tax: 10.0,      // Domyślnie 10% dla bezpieczeństwa
+        max_buy_tax: 10.0,      // Domyślnie 10% dla bezpieczeństwa
+        max_sell_tax: 10.0,     // Domyślnie 10% dla bezpieczeństwa
         profit_target_percent: 200.0,
         stop_loss_percent: 50.0,
         max_market_cap: 100_000.0,
@@ -212,19 +232,37 @@ fn load_config_sources(args: &Args) -> Result<LoadedConfig> {
             .with_context(|| format!("Parsing YAML {}", &args.config))?;
 
         if let Some(rpc) = root.rpc {
-            if let Some(u) = rpc.url { rpc_url = u; }
-            if let Some(w) = rpc.ws_url { ws_url = w; }
+            if let Some(u) = rpc.url {
+                rpc_url = u;
+            }
+            if let Some(w) = rpc.ws_url {
+                ws_url = w;
+            }
         }
         if let Some(w) = root.wallet {
-            if let Some(p) = w.path { wallet_path = p; }
+            if let Some(p) = w.path {
+                wallet_path = p;
+            }
         }
         if let Some(s) = root.sniper {
-            if let Some(v) = s.max_position_sol { config.max_position_sol = v; }
-            if let Some(v) = s.scan_interval_ms { config.scan_interval_ms = v; }
-            if let Some(v) = s.max_slippage_bps { config.max_slippage_bps = v; }
-            if let Some(v) = s.priority_fee_lamports { config.priority_fee_lamports = v; }
-            if let Some(v) = s.profit_target_percent { config.profit_target_percent = v; }
-            if let Some(v) = s.stop_loss_percent { config.stop_loss_percent = v; }
+            if let Some(v) = s.max_position_sol {
+                config.max_position_sol = v;
+            }
+            if let Some(v) = s.scan_interval_ms {
+                config.scan_interval_ms = v;
+            }
+            if let Some(v) = s.max_slippage_bps {
+                config.max_slippage_bps = v;
+            }
+            if let Some(v) = s.priority_fee_lamports {
+                config.priority_fee_lamports = v;
+            }
+            if let Some(v) = s.profit_target_percent {
+                config.profit_target_percent = v;
+            }
+            if let Some(v) = s.stop_loss_percent {
+                config.stop_loss_percent = v;
+            }
             // Upewnij się, że min_liquidity_sol jest również ustawione z safety config
             if let Some(safe) = root.safety.clone() {
                 if let Some(v) = safe.min_liquidity_sol {
@@ -286,38 +324,68 @@ fn load_config_sources(args: &Args) -> Result<LoadedConfig> {
             }
         }
     } else {
-        warn!("Config file not found: {}. Using defaults and CLI overrides.", &args.config);
+        warn!(
+            "Config file not found: {}. Using defaults and CLI overrides.",
+            &args.config
+        );
     }
 
     // CLI overrides
-    if let Some(s) = args.max_position { config.max_position_sol = s; }
-    if let Some(s) = args.profit_target { config.profit_target_percent = s; }
-    if let Some(s) = args.stop_loss { config.stop_loss_percent = s; }
-    if let Some(s) = args.scan_interval { config.scan_interval_ms = s; }
-    if let Some(s) = args.rpc_url.clone() { rpc_url = s; }
-    if let Some(s) = args.ws_url.clone() { ws_url = s; }
-    if let Some(s) = args.wallet_path.clone() { wallet_path = s; }
+    if let Some(s) = args.max_position {
+        config.max_position_sol = s;
+    }
+    if let Some(s) = args.profit_target {
+        config.profit_target_percent = s;
+    }
+    if let Some(s) = args.stop_loss {
+        config.stop_loss_percent = s;
+    }
+    if let Some(s) = args.scan_interval {
+        config.scan_interval_ms = s;
+    }
+    if let Some(s) = args.rpc_url.clone() {
+        rpc_url = s;
+    }
+    if let Some(s) = args.ws_url.clone() {
+        ws_url = s;
+    }
+    if let Some(s) = args.wallet_path.clone() {
+        wallet_path = s;
+    }
 
     info!("📋 Sniper Configuration:");
     info!("  💰 Max position: {} SOL", config.max_position_sol);
     info!("  📈 Profit target: {}%", config.profit_target_percent);
     info!("  📉 Stop loss: {}%", config.stop_loss_percent);
     info!("  ⏱️  Scan interval: {}ms", config.scan_interval_ms);
-    info!("  ⏰ Position timeout: {} min", config.position_timeout_minutes);
+    info!(
+        "  ⏰ Position timeout: {} min",
+        config.position_timeout_minutes
+    );
 
     info!("🔒 Safety Configuration:");
-    info!("  💧 Min liquidity: {} SOL", safety_config.min_liquidity_sol);
+    info!(
+        "  💧 Min liquidity: {} SOL",
+        safety_config.min_liquidity_sol
+    );
     info!("  🏭 Max market cap: ${}", safety_config.max_market_cap_usd);
     info!("  📊 Max buy tax: {}%", safety_config.max_buy_tax_percent);
     info!("  📊 Max sell tax: {}%", safety_config.max_sell_tax_percent);
-    info!("  🔍 Safety checks: {}", if safety_config.enable_safety_checks { "ENABLED" } else { "DISABLED" });
+    info!(
+        "  🔍 Safety checks: {}",
+        if safety_config.enable_safety_checks {
+            "ENABLED"
+        } else {
+            "DISABLED"
+        }
+    );
 
     Ok(LoadedConfig {
         sniper_config: config,
         safety_config,
         rpc_url,
         ws_url,
-        wallet_path
+        wallet_path,
     })
 }
 

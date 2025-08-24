@@ -4,8 +4,8 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use log::info;
 use rust_decimal::Decimal;
-use sqlx::{SqlitePool, Row};
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions, SqliteJournalMode};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
+use sqlx::{Row, SqlitePool};
 use std::path::Path;
 use std::str::FromStr;
 
@@ -32,10 +32,10 @@ impl Database {
             .max_connections(5)
             .connect_with(options)
             .await?;
-        
+
         let db = Self { pool };
         db.init_schema().await?;
-        
+
         info!("📊 Database initialized at: {}", database_path);
         Ok(db)
     }
@@ -112,7 +112,11 @@ impl Database {
     }
 
     /// Get recent transactions with pagination
-    pub async fn get_transactions(&self, limit: i64, offset: i64) -> Result<Vec<TransactionRecord>> {
+    pub async fn get_transactions(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<TransactionRecord>> {
         let rows = sqlx::query(
             r#"
             SELECT id, timestamp, signature, buy_dex, sell_dex, amount_sol,
@@ -131,7 +135,8 @@ impl Database {
         for row in rows {
             let tx = TransactionRecord {
                 id: Some(row.get::<i64, _>("id")),
-                timestamp: DateTime::parse_from_rfc3339(&row.get::<String, _>("timestamp"))?.with_timezone(&Utc),
+                timestamp: DateTime::parse_from_rfc3339(&row.get::<String, _>("timestamp"))?
+                    .with_timezone(&Utc),
                 signature: row.get("signature"),
                 buy_dex: row.get("buy_dex"),
                 sell_dex: row.get("sell_dex"),
@@ -203,7 +208,7 @@ impl Database {
         let row = sqlx::query("SELECT COUNT(*) as count FROM transactions")
             .fetch_one(&self.pool)
             .await?;
-        
+
         Ok(row.get("count"))
     }
 }

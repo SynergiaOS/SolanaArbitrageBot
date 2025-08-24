@@ -1,19 +1,28 @@
-use axum::{Router, routing::{post, get}};
 use axum::http::{Request, StatusCode};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use http_body_util::BodyExt;
-use rust_decimal::Decimal;
-use std::sync::{Arc, OnceLock, Mutex};
-use tokio::sync::{Mutex as AsyncMutex, RwLock, broadcast};
-use tower::ServiceExt; // for oneshot
 use log::{Level, LevelFilter, Metadata, Record};
+use rust_decimal::Decimal;
+use std::sync::{Arc, Mutex, OnceLock};
+use tokio::sync::{broadcast, Mutex as AsyncMutex, RwLock};
+use tower::ServiceExt; // for oneshot
 
 use solana_arbitrage_bot::web::{self, WebConfig, WebSocketMessage};
-use solana_arbitrage_bot::{Config, LimitsConfig, ExecutionConfig, RpcConfig, WalletConfig, DexConfig, DexInfo, SharedState};
+use solana_arbitrage_bot::{
+    Config, DexConfig, DexInfo, ExecutionConfig, LimitsConfig, RpcConfig, SharedState, WalletConfig,
+};
 
 // Simple in-memory test logger to capture warn! lines
-struct TestLogger { lines: Mutex<Vec<String>> }
+struct TestLogger {
+    lines: Mutex<Vec<String>>,
+}
 impl log::Log for TestLogger {
-    fn enabled(&self, metadata: &Metadata) -> bool { metadata.level() <= Level::Warn }
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        metadata.level() <= Level::Warn
+    }
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
             let mut l = self.lines.lock().unwrap();
@@ -24,8 +33,12 @@ impl log::Log for TestLogger {
 }
 static TEST_LOGGER: OnceLock<&'static TestLogger> = OnceLock::new();
 fn ensure_logger() -> &'static TestLogger {
-    if let Some(l) = TEST_LOGGER.get() { return *l; }
-    let logger = Box::leak(Box::new(TestLogger { lines: Mutex::new(Vec::new()) }));
+    if let Some(l) = TEST_LOGGER.get() {
+        return *l;
+    }
+    let logger = Box::leak(Box::new(TestLogger {
+        lines: Mutex::new(Vec::new()),
+    }));
     let _ = log::set_logger(logger);
     log::set_max_level(LevelFilter::Warn);
     let _ = TEST_LOGGER.set(logger);
@@ -34,9 +47,25 @@ fn ensure_logger() -> &'static TestLogger {
 
 fn sample_config() -> Config {
     Config {
-        rpc: RpcConfig { url: "http://localhost".into(), ws_url: "ws://localhost".into() },
-        wallet: WalletConfig { path: "./wallet.json".into(), use_ledger: None, ledger_path: None },
-        dex: DexConfig { raydium: DexInfo { program_id: "".into(), sol_usdc_pool: "".into() }, orca: DexInfo { program_id: "".into(), sol_usdc_pool: "".into() } },
+        rpc: RpcConfig {
+            url: "http://localhost".into(),
+            ws_url: "ws://localhost".into(),
+        },
+        wallet: WalletConfig {
+            path: "./wallet.json".into(),
+            use_ledger: None,
+            ledger_path: None,
+        },
+        dex: DexConfig {
+            raydium: DexInfo {
+                program_id: "".into(),
+                sol_usdc_pool: "".into(),
+            },
+            orca: DexInfo {
+                program_id: "".into(),
+                sol_usdc_pool: "".into(),
+            },
+        },
         limits: LimitsConfig {
             max_position_sol: Decimal::from_f64_retain(0.05).unwrap(),
             min_profit_percent: Decimal::from_f64_retain(0.3).unwrap(),
@@ -45,9 +74,19 @@ fn sample_config() -> Config {
             max_daily_loss_usd: Decimal::from_f64_retain(10.0).unwrap(),
             max_daily_trades: 50,
         },
-        execution: ExecutionConfig { priority_fee_lamports: 5000, simulation_required: true, max_retries: 3 },
+        execution: ExecutionConfig {
+            priority_fee_lamports: 5000,
+            simulation_required: true,
+            max_retries: 3,
+        },
         discord: None,
-        web: Some(WebConfig { enabled: true, host: "127.0.0.1".into(), port: 3001, auth_token: None, database_path: "./data/test.db".into() }),
+        web: Some(WebConfig {
+            enabled: true,
+            host: "127.0.0.1".into(),
+            port: 3001,
+            auth_token: None,
+            database_path: "./data/test.db".into(),
+        }),
     }
 }
 
@@ -55,7 +94,7 @@ async fn build_app_state(cfg: &Config) -> web::server::AppState {
     let web_cfg = cfg.web.clone().unwrap();
     let database = Arc::new(web::Database::new(&web_cfg.database_path).await.unwrap());
     let (websocket_tx, _) = broadcast::channel(100);
-    let runtime_config = Arc::new(RwLock::new(web::BotConfig{
+    let runtime_config = Arc::new(RwLock::new(web::BotConfig {
         min_profit_usd: cfg.limits.min_profit_usd,
         max_position_sol: cfg.limits.max_position_sol,
         max_daily_trades: cfg.limits.max_daily_trades,
@@ -63,7 +102,7 @@ async fn build_app_state(cfg: &Config) -> web::server::AppState {
         enabled: true,
     }));
     web::server::AppState {
-        bot_state: SharedState{
+        bot_state: SharedState {
             raydium_price: Arc::new(AsyncMutex::new(None)),
             orca_price: Arc::new(AsyncMutex::new(None)),
             trades_today: Arc::new(AsyncMutex::new(0)),
@@ -136,7 +175,10 @@ async fn emergency_empty_body_returns_200_and_stops_bot() {
     let state_clone = app_state.clone();
 
     let app = Router::new()
-        .route("/api/control/emergency", post(web::handlers::emergency_stop))
+        .route(
+            "/api/control/emergency",
+            post(web::handlers::emergency_stop),
+        )
         .with_state(app_state);
 
     let request = Request::builder()
@@ -161,7 +203,10 @@ async fn emergency_json_body_returns_200_and_logs() {
     let app_state = build_app_state(&cfg).await;
 
     let app = Router::new()
-        .route("/api/control/emergency", post(web::handlers::emergency_stop))
+        .route(
+            "/api/control/emergency",
+            post(web::handlers::emergency_stop),
+        )
         .with_state(app_state);
 
     let body = r#"{"reason":"smoke","source":"test"}"#;
@@ -213,4 +258,3 @@ async fn get_status_returns_valid_structure() {
     assert!(obj.contains_key("trades_today"));
     assert!(obj.contains_key("profit_today"));
 }
-

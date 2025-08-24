@@ -3,11 +3,11 @@
 
 use anyhow::Result;
 use solana_arbitrage_bot::sniper::{
-    SafetyChecker, SafetyConfig, SafetyResult, RugMonitor, RugMonitorConfig,
-    EnhancedTokenData, RealTimeMetrics
+    EnhancedTokenData, RealTimeMetrics, RugMonitor, RugMonitorConfig, SafetyChecker, SafetyConfig,
+    SafetyResult,
 };
-use solana_sdk::pubkey::Pubkey;
 use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 
 #[cfg(test)]
@@ -52,7 +52,9 @@ mod safety_tests {
 
     async fn create_test_rpc_client() -> Arc<RpcClient> {
         // Use a mock RPC client for testing
-        Arc::new(RpcClient::new("https://api.mainnet-beta.solana.com".to_string()))
+        Arc::new(RpcClient::new(
+            "https://api.mainnet-beta.solana.com".to_string(),
+        ))
     }
 
     #[tokio::test]
@@ -60,14 +62,35 @@ mod safety_tests {
         let config = test_safety_config();
 
         // Test that all safety thresholds are reasonable
-        assert!(config.min_liquidity_sol > 0.0, "Min liquidity should be positive");
-        assert!(config.max_market_cap_usd > 0.0, "Max market cap should be positive");
-        assert!(config.max_buy_tax_percent >= 0.0, "Buy tax should be non-negative");
-        assert!(config.max_sell_tax_percent >= 0.0, "Sell tax should be non-negative");
-        assert!(config.max_token_age_minutes > 0, "Max token age should be positive");
+        assert!(
+            config.min_liquidity_sol > 0.0,
+            "Min liquidity should be positive"
+        );
+        assert!(
+            config.max_market_cap_usd > 0.0,
+            "Max market cap should be positive"
+        );
+        assert!(
+            config.max_buy_tax_percent >= 0.0,
+            "Buy tax should be non-negative"
+        );
+        assert!(
+            config.max_sell_tax_percent >= 0.0,
+            "Sell tax should be non-negative"
+        );
+        assert!(
+            config.max_token_age_minutes > 0,
+            "Max token age should be positive"
+        );
         assert!(config.min_holders > 0, "Min holders should be positive");
-        assert!(config.max_dev_percentage >= 0.0, "Max dev percentage should be non-negative");
-        assert!(config.enable_safety_checks, "Safety checks should be enabled");
+        assert!(
+            config.max_dev_percentage >= 0.0,
+            "Max dev percentage should be non-negative"
+        );
+        assert!(
+            config.enable_safety_checks,
+            "Safety checks should be enabled"
+        );
     }
 
     #[tokio::test]
@@ -80,7 +103,10 @@ mod safety_tests {
         // Test that checker is properly initialized
         assert_eq!(checker.config.min_liquidity_sol, config.min_liquidity_sol);
         assert_eq!(checker.config.max_market_cap_usd, config.max_market_cap_usd);
-        assert_eq!(checker.config.enable_safety_checks, config.enable_safety_checks);
+        assert_eq!(
+            checker.config.enable_safety_checks,
+            config.enable_safety_checks
+        );
     }
 
     #[tokio::test]
@@ -116,11 +142,26 @@ mod safety_tests {
         let config = test_rug_monitor_config();
 
         assert!(config.enable_monitoring, "Rug monitoring should be enabled");
-        assert!(config.liquidity_drop_threshold > 0.0, "Liquidity threshold should be positive");
-        assert!(config.authority_change_timeout > 0, "Authority timeout should be positive");
-        assert!(config.tax_increase_threshold > 0.0, "Tax threshold should be positive");
-        assert!(config.monitoring_duration_minutes > 0, "Monitoring duration should be positive");
-        assert!(config.check_interval_seconds > 0, "Check interval should be positive");
+        assert!(
+            config.liquidity_drop_threshold > 0.0,
+            "Liquidity threshold should be positive"
+        );
+        assert!(
+            config.authority_change_timeout > 0,
+            "Authority timeout should be positive"
+        );
+        assert!(
+            config.tax_increase_threshold > 0.0,
+            "Tax threshold should be positive"
+        );
+        assert!(
+            config.monitoring_duration_minutes > 0,
+            "Monitoring duration should be positive"
+        );
+        assert!(
+            config.check_interval_seconds > 0,
+            "Check interval should be positive"
+        );
     }
 
     #[tokio::test]
@@ -132,15 +173,24 @@ mod safety_tests {
 
         // Test that monitor is properly initialized
         assert_eq!(monitor.config.enable_monitoring, config.enable_monitoring);
-        assert_eq!(monitor.config.liquidity_drop_threshold, config.liquidity_drop_threshold);
-        assert_eq!(monitor.config.authority_change_timeout, config.authority_change_timeout);
+        assert_eq!(
+            monitor.config.liquidity_drop_threshold,
+            config.liquidity_drop_threshold
+        );
+        assert_eq!(
+            monitor.config.authority_change_timeout,
+            config.authority_change_timeout
+        );
     }
 
     #[tokio::test]
     async fn test_enhanced_token_data_defaults() {
         let data = EnhancedTokenData::default();
 
-        assert!(data.creation_time.is_none(), "Creation time should default to None");
+        assert!(
+            data.creation_time.is_none(),
+            "Creation time should default to None"
+        );
         assert!(data.creator.is_none(), "Creator should default to None");
         assert!(!data.is_verified, "Token should not be verified by default");
         assert!(!data.is_frozen, "Token should not be frozen by default");
@@ -151,7 +201,10 @@ mod safety_tests {
     async fn test_realtime_metrics_defaults() {
         let metrics = RealTimeMetrics::default();
 
-        assert_eq!(metrics.current_price, 0.0, "Current price should default to 0");
+        assert_eq!(
+            metrics.current_price, 0.0,
+            "Current price should default to 0"
+        );
         assert_eq!(metrics.volume_24h, 0.0, "24h volume should default to 0");
         assert_eq!(metrics.holder_count, 0, "Holder count should default to 0");
         assert_eq!(metrics.market_cap, 0.0, "Market cap should default to 0");
@@ -164,7 +217,9 @@ mod safety_tests {
 
         match safe_result {
             SafetyResult::Safe => assert!(true, "Safe result should match Safe variant"),
-            SafetyResult::Unsafe(_) => assert!(false, "Safe result should not match Unsafe variant"),
+            SafetyResult::Unsafe(_) => {
+                assert!(false, "Safe result should not match Unsafe variant")
+            }
         }
 
         match unsafe_result {
@@ -198,10 +253,10 @@ mod safety_tests {
         for config in invalid_configs {
             // These should be caught by validation
             assert!(
-                config.min_liquidity_sol < 0.0 ||
-                config.max_market_cap_usd <= 0.0 ||
-                config.max_token_age_minutes <= 0 ||
-                config.min_holders <= 0,
+                config.min_liquidity_sol < 0.0
+                    || config.max_market_cap_usd <= 0.0
+                    || config.max_token_age_minutes <= 0
+                    || config.min_holders <= 0,
                 "Invalid config should be detected"
             );
         }
@@ -249,7 +304,9 @@ mod safety_tests {
         }
 
         match tax_alert {
-            RugAlert::TaxIncreased { old_buy, new_buy, .. } => {
+            RugAlert::TaxIncreased {
+                old_buy, new_buy, ..
+            } => {
                 assert_eq!(old_buy, 5.0, "Old buy tax should be 5%");
                 assert_eq!(new_buy, 15.0, "New buy tax should be 15%");
             }
@@ -274,7 +331,10 @@ mod safety_tests {
 
         // When safety checks are disabled, should return Safe
         // Note: This would require a mock token, so we'll just test the config
-        assert!(!checker.config.enable_safety_checks, "Safety checks should be disabled");
+        assert!(
+            !checker.config.enable_safety_checks,
+            "Safety checks should be disabled"
+        );
     }
 
     #[tokio::test]
@@ -291,7 +351,9 @@ mod safety_tests {
         checker.add_blacklisted_keyword(test_keyword.to_string());
 
         assert!(checker.blacklisted_creators.contains(&test_creator));
-        assert!(checker.blacklisted_keywords.contains(&test_keyword.to_string()));
+        assert!(checker
+            .blacklisted_keywords
+            .contains(&test_keyword.to_string()));
     }
 
     #[tokio::test]
@@ -317,10 +379,22 @@ mod safety_tests {
         ];
 
         for config in edge_case_configs {
-            assert!(config.liquidity_drop_threshold > 0.0, "Threshold should be positive");
-            assert!(config.liquidity_drop_threshold < 100.0, "Threshold should be less than 100%");
-            assert!(config.check_interval_seconds > 0, "Check interval should be positive");
-            assert!(config.monitoring_duration_minutes > 0, "Monitoring duration should be positive");
+            assert!(
+                config.liquidity_drop_threshold > 0.0,
+                "Threshold should be positive"
+            );
+            assert!(
+                config.liquidity_drop_threshold < 100.0,
+                "Threshold should be less than 100%"
+            );
+            assert!(
+                config.check_interval_seconds > 0,
+                "Check interval should be positive"
+            );
+            assert!(
+                config.monitoring_duration_minutes > 0,
+                "Monitoring duration should be positive"
+            );
         }
     }
 }
