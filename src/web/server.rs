@@ -160,11 +160,25 @@ impl WebServer {
             .route("/api/control/pause", post(handlers::pause_bot))
             .route("/api/control/emergency", post(handlers::emergency_stop))
             .route_layer(tower_http::limit::RequestBodyLimitLayer::new(64 * 1024))
-            .route_layer(tower::limit::ConcurrencyLimitLayer::new(128))
+            .route_layer(
+                ServiceBuilder::new()
+                    .layer(axum::error_handling::HandleErrorLayer::new(
+                        |_err: tower::BoxError| async move {
+                            (
+                                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                                "service overloaded",
+                            )
+                        },
+                    ))
+                    .layer(tower::limit::ConcurrencyLimitLayer::new(128))
+                    .layer(tower::buffer::BufferLayer::new(1024)),
+            )
             .route_layer(
                 tower_http::set_header::SetResponseHeaderLayer::if_not_present(
                     axum::http::header::STRICT_TRANSPORT_SECURITY,
-                    axum::http::HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+                    axum::http::HeaderValue::from_static(
+                        "max-age=31536000; includeSubDomains; preload",
+                    ),
                 ),
             )
             .route_layer(
@@ -184,11 +198,25 @@ impl WebServer {
         let config_router = Router::new()
             .route("/api/config", post(handlers::update_bot_config))
             .route_layer(tower_http::limit::RequestBodyLimitLayer::new(64 * 1024))
-            .route_layer(tower::limit::ConcurrencyLimitLayer::new(64))
+            .route_layer(
+                ServiceBuilder::new()
+                    .layer(axum::error_handling::HandleErrorLayer::new(
+                        |_err: tower::BoxError| async move {
+                            (
+                                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                                "service overloaded",
+                            )
+                        },
+                    ))
+                    .layer(tower::limit::ConcurrencyLimitLayer::new(128))
+                    .layer(tower::buffer::BufferLayer::new(1024)),
+            )
             .route_layer(
                 tower_http::set_header::SetResponseHeaderLayer::if_not_present(
                     axum::http::header::STRICT_TRANSPORT_SECURITY,
-                    axum::http::HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+                    axum::http::HeaderValue::from_static(
+                        "max-age=31536000; includeSubDomains; preload",
+                    ),
                 ),
             )
             .route_layer(

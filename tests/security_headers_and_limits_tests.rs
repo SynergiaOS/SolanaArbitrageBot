@@ -32,6 +32,7 @@ async fn security_headers_and_body_limit_applied() {
     let req = Request::builder()
         .method("POST")
         .uri("/api/control/emergency")
+        .header("content-length", (70 * 1024).to_string())
         .body(axum::body::Body::from(big))
         .unwrap();
     let resp = app.clone().oneshot(req).await.unwrap();
