@@ -548,6 +548,7 @@ mod tests {
             },
             execution: crate::ExecutionConfig {
                 priority_fee_lamports: 10000,
+                max_priority_fee_cap_lamports: Some(50_000),
                 simulation_required: true,
                 max_retries: 3,
             },

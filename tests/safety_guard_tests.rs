@@ -36,6 +36,7 @@ async fn dynamic_daily_limits_are_applied() {
         },
         execution: solana_arbitrage_bot::ExecutionConfig {
             priority_fee_lamports: 1,
+            max_priority_fee_cap_lamports: Some(50_000),
             simulation_required: true,
             max_retries: 1,
         },

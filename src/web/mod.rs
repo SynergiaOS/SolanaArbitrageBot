@@ -7,6 +7,8 @@ pub mod enhanced_websocket;
 pub mod handlers;
 pub mod mock_sniper;
 pub mod server;
+pub mod rate_limit;
+pub mod metrics;
 pub mod websocket;
 
 pub use database::Database;
@@ -17,6 +19,22 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct ApiKeysConfig {
+    pub admin_api_key: Option<String>,
+    pub config_api_key: Option<String>,
+    pub status_api_key: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RateLimitsConfig {
+    pub default_per_ip_per_minute: Option<u64>,
+    pub control_per_ip_per_minute: Option<u64>,
+    pub config_per_ip_per_minute: Option<u64>,
+    pub status_per_ip_per_minute: Option<u64>,
+}
+
+
 /// Configuration for the web dashboard
 #[derive(Debug, Clone, Deserialize)]
 pub struct WebConfig {
@@ -25,6 +43,10 @@ pub struct WebConfig {
     pub port: u16,
     pub auth_token: Option<String>,
     pub database_path: String,
+    pub allowed_origins: Option<Vec<String>>, // CORS whitelist for production
+    pub rate_limits: Option<RateLimitsConfig>,
+    pub api_keys: Option<ApiKeysConfig>,
+    pub control_ip_allowlist: Option<Vec<String>>, // CIDR or IP strings
 }
 
 impl Default for WebConfig {
@@ -35,6 +57,18 @@ impl Default for WebConfig {
             port: 3001,
             auth_token: None,
             database_path: "./dashboard.db".to_string(),
+            allowed_origins: Some(vec![
+                "http://localhost:3000".to_string(),
+                "http://127.0.0.1:3000".to_string(),
+            ]),
+            rate_limits: Some(RateLimitsConfig {
+                default_per_ip_per_minute: Some(100),
+                control_per_ip_per_minute: Some(10),
+                config_per_ip_per_minute: Some(20),
+                status_per_ip_per_minute: Some(100),
+            }),
+            api_keys: None,
+            control_ip_allowlist: None,
         }
     }
 }

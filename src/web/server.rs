@@ -16,6 +16,8 @@ use tower_http::{
     services::ServeDir,
     timeout::TimeoutLayer,
 };
+use crate::web::rate_limit::RateLimitLayer;
+use crate::web::metrics::{MetricsLayer, metrics_handler};
 
 use super::{
     auth,
@@ -103,11 +105,21 @@ impl WebServer {
         );
 
         // Build secure CORS layer - restrict to specific origins
-        let cors = CorsLayer::new()
-            .allow_origin([
-                "http://localhost:3000".parse().unwrap(),
-                "http://127.0.0.1:3000".parse().unwrap(),
-            ])
+        let allowed = self
+            .app_state
+            .config
+            .allowed_origins
+            .clone()
+            .unwrap_or_else(|| vec![
+                "http://localhost:3000".to_string(),
+                "http://127.0.0.1:3000".to_string(),
+            ]);
+        let cors = CorsLayer::new().allow_origin(
+            allowed
+                .into_iter()
+                .filter_map(|o| o.parse().ok())
+                .collect::<Vec<_>>()
+        )
             .allow_methods([
                 Method::GET,
                 Method::POST,
@@ -128,10 +140,9 @@ impl WebServer {
             .route("/api/config", post(handlers::update_bot_config))
             .route("/api/transactions", get(handlers::get_transactions))
             .route("/api/stats", get(handlers::get_daily_stats))
-            .route("/api/control/start", post(handlers::start_bot))
-            .route("/api/control/stop", post(handlers::stop_bot))
-            .route("/api/control/pause", post(handlers::pause_bot))
-            .route("/api/control/emergency", post(handlers::emergency_stop))
+            // Prometheus metrics endpoint (public)
+            .route("/metrics", get(metrics_handler))
+
             // WebSocket endpoint
             .route("/ws", get(websocket::websocket_handler))
             // Static files and dashboard
@@ -140,9 +151,51 @@ impl WebServer {
             .layer(
                 ServiceBuilder::new()
                     .layer(TimeoutLayer::new(std::time::Duration::from_secs(30))) // Request timeout
+                    .layer(MetricsLayer)
+                    .layer(RateLimitLayer::from_config(&self.app_state.config.rate_limits))
                     .layer(cors)
-                    .layer(auth::auth_middleware(config.auth_token.clone())),
+                    .layer(auth::auth_middleware_from_config(&self.app_state.config)),
             )
+            .with_state(self.app_state.clone());
+
+        // Per-route hardened routers
+        let control_router = Router::new()
+            .route("/api/control/start", post(handlers::start_bot))
+            .route("/api/control/stop", post(handlers::stop_bot))
+            .route("/api/control/pause", post(handlers::pause_bot))
+            .route("/api/control/emergency", post(handlers::emergency_stop))
+            .route_layer(tower_http::limit::RequestBodyLimitLayer::new(64 * 1024))
+            .route_layer(tower::limit::ConcurrencyLimitLayer::new(128))
+            .route_layer(tower_http::set_header::SetResponseHeaderLayer::if_not_present(
+                axum::http::header::STRICT_TRANSPORT_SECURITY,
+                axum::http::HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+            ))
+            .route_layer(tower_http::set_header::SetResponseHeaderLayer::if_not_present(
+                axum::http::HeaderName::from_static("x-content-type-options"),
+                axum::http::HeaderValue::from_static("nosniff"),
+            ))
+            .route_layer(tower_http::set_header::SetResponseHeaderLayer::if_not_present(
+                axum::http::HeaderName::from_static("referrer-policy"),
+                axum::http::HeaderValue::from_static("no-referrer"),
+            ))
+            .with_state(self.app_state.clone());
+
+        let config_router = Router::new()
+            .route("/api/config", post(handlers::update_bot_config))
+            .route_layer(tower_http::limit::RequestBodyLimitLayer::new(64 * 1024))
+            .route_layer(tower::limit::ConcurrencyLimitLayer::new(64))
+            .route_layer(tower_http::set_header::SetResponseHeaderLayer::if_not_present(
+                axum::http::header::STRICT_TRANSPORT_SECURITY,
+                axum::http::HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+            ))
+            .route_layer(tower_http::set_header::SetResponseHeaderLayer::if_not_present(
+                axum::http::HeaderName::from_static("x-content-type-options"),
+                axum::http::HeaderValue::from_static("nosniff"),
+            ))
+            .route_layer(tower_http::set_header::SetResponseHeaderLayer::if_not_present(
+                axum::http::HeaderName::from_static("referrer-policy"),
+                axum::http::HeaderValue::from_static("no-referrer"),
+            ))
             .with_state(self.app_state.clone());
 
         // Create enhanced WebSocket router with separate state
@@ -154,7 +207,7 @@ impl WebServer {
             .with_state(self.enhanced_ws_state.clone());
 
         // Merge routers
-        let app = app.merge(enhanced_ws_router);
+        let app = app.merge(control_router).merge(config_router).merge(enhanced_ws_router);
 
         // Create listener
         let listener =

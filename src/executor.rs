@@ -108,6 +108,7 @@ pub struct TransactionExecutor {
     wallet: WalletType,
     dry_run: bool,
     priority_fee: u64,
+    max_priority_fee: u64,
     simulation_required: bool,
     slippage_bps: u16,
     http_client: reqwest::Client,
@@ -164,11 +165,24 @@ impl TransactionExecutor {
             .https_only(true) // Only allow HTTPS connections
             .build()?;
 
+        let cap = config
+            .execution
+            .max_priority_fee_cap_lamports
+            .unwrap_or(50_000);
+        let requested = config.execution.priority_fee_lamports;
+        if requested > cap {
+            return Err(anyhow!(
+                "Priority fee {} exceeds cap {} (lamports)",
+                requested, cap
+            ));
+        }
+
         Ok(Self {
             rpc_client,
             wallet,
             dry_run,
-            priority_fee: config.execution.priority_fee_lamports,
+            priority_fee: requested,
+            max_priority_fee: cap,
             simulation_required: config.execution.simulation_required,
             slippage_bps: (decimal_to_f64(config.limits.max_slippage_percent) * 100.0) as u16,
             http_client,
@@ -652,8 +666,8 @@ impl TransactionExecutor {
 
         // Build instructions
         let instructions = vec![
-            // Add compute budget instruction
-            ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee),
+            // Enforce runtime cap for compute unit price
+            ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee.min(self.max_priority_fee)),
             // Add compute unit limit
             ComputeBudgetInstruction::set_compute_unit_limit(300_000),
         ];

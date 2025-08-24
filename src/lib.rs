@@ -87,6 +87,7 @@ pub struct LimitsConfig {
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct ExecutionConfig {
     pub priority_fee_lamports: u64,
+    pub max_priority_fee_cap_lamports: Option<u64>,
     pub simulation_required: bool,
     pub max_retries: u32,
 }
