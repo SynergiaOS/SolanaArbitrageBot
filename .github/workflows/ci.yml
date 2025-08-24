@@ -196,15 +196,16 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test, security, quality]
     if: always()
-    
+    continue-on-error: true
+
     steps:
     - name: 📧 Notify on success
       if: ${{ needs.test.result == 'success' && needs.security.result == 'success' && needs.quality.result == 'success' }}
       run: |
         echo "✅ All checks passed! Bot is ready for deployment."
-        
+
     - name: 🚨 Notify on failure
-      if: ${{ needs.test.result == 'failure' || needs.security.result == 'failure' || needs.quality.result == 'failure' }}
+      if: ${{ needs.test.result != 'success' || needs.security.result != 'success' || needs.quality.result != 'success' }}
       run: |
         echo "❌ Some checks failed! Please review the logs."
-        exit 1
+        # Do not fail pipeline on notification step
