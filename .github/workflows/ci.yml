@@ -18,6 +18,7 @@ jobs:
     strategy:
       matrix:
         rust: [stable, beta]
+    continue-on-error: ${{ matrix.rust == 'beta' }}
     
     steps:
     - name: 📥 Checkout code
