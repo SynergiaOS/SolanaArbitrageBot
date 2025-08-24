@@ -34,8 +34,8 @@ core:
     max_retries: 3
   
   discord:
-    webhook_url: "YOUR_DISCORD_WEBHOOK_URL"
-    enabled: true
+    webhook_url: "${DISCORD_WEBHOOK_URL}"
+    enabled: ${DISCORD_ENABLED:true}
     alert_on_profit: true
     alert_on_error: true
     alert_on_startup: true
