@@ -1,10 +1,10 @@
 //! Comprehensive Safety Integration Tests
 //! Tests all safety features including pre-trade checks, post-trade monitoring, and emergency procedures
 
-use anyhow::Result;
+
 use solana_arbitrage_bot::sniper::{
-    EnhancedTokenData, RealTimeMetrics, RugMonitor, RugMonitorConfig, SafetyChecker, SafetyConfig,
-    SafetyResult,
+    safety::{EnhancedTokenData, RealTimeMetrics},
+    RugMonitor, RugMonitorConfig, SafetyChecker, SafetyConfig, SafetyResult,
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
@@ -39,7 +39,7 @@ mod safety_tests {
         }
     }
 
-    fn test_rug_monitor_config() -> RugMonitorConfig {
+    fn make_test_rug_monitor_config() -> RugMonitorConfig {
         RugMonitorConfig {
             enable_monitoring: true,
             liquidity_drop_threshold: 30.0,
@@ -101,10 +101,10 @@ mod safety_tests {
         let checker = SafetyChecker::from_config(&config, rpc_client);
 
         // Test that checker is properly initialized
-        assert_eq!(checker.config.min_liquidity_sol, config.min_liquidity_sol);
-        assert_eq!(checker.config.max_market_cap_usd, config.max_market_cap_usd);
+        assert_eq!(checker.get_config().min_liquidity_sol, config.min_liquidity_sol);
+        assert_eq!(checker.get_config().max_market_cap_usd, config.max_market_cap_usd);
         assert_eq!(
-            checker.config.enable_safety_checks,
+            checker.get_config().enable_safety_checks,
             config.enable_safety_checks
         );
     }
@@ -121,7 +121,7 @@ mod safety_tests {
         let checker = SafetyChecker::from_config(&config, rpc_client);
 
         // Test that blacklisted creator is detected
-        assert!(checker.blacklisted_creators.contains(&test_creator));
+        assert!(checker.is_creator_blacklisted(&test_creator));
     }
 
     #[tokio::test]
@@ -133,13 +133,13 @@ mod safety_tests {
         // Test suspicious keywords
         let suspicious_keywords = vec!["scam", "rug", "fake", "test"];
         for keyword in suspicious_keywords {
-            assert!(checker.blacklisted_keywords.contains(&keyword.to_string()));
+            assert!(checker.is_keyword_blacklisted(keyword));
         }
     }
 
     #[tokio::test]
     async fn test_rug_monitor_config() {
-        let config = test_rug_monitor_config();
+        let config = make_test_rug_monitor_config();
 
         assert!(config.enable_monitoring, "Rug monitoring should be enabled");
         assert!(
@@ -167,18 +167,18 @@ mod safety_tests {
     #[tokio::test]
     async fn test_rug_monitor_creation() {
         let rpc_client = create_test_rpc_client().await;
-        let config = test_rug_monitor_config();
+        let config = make_test_rug_monitor_config();
 
         let monitor = RugMonitor::with_config(config.clone(), rpc_client);
 
         // Test that monitor is properly initialized
-        assert_eq!(monitor.config.enable_monitoring, config.enable_monitoring);
+        assert_eq!(monitor.get_config().enable_monitoring, config.enable_monitoring);
         assert_eq!(
-            monitor.config.liquidity_drop_threshold,
+            monitor.get_config().liquidity_drop_threshold,
             config.liquidity_drop_threshold
         );
         assert_eq!(
-            monitor.config.authority_change_timeout,
+            monitor.get_config().authority_change_timeout,
             config.authority_change_timeout
         );
     }
@@ -332,7 +332,7 @@ mod safety_tests {
         // When safety checks are disabled, should return Safe
         // Note: This would require a mock token, so we'll just test the config
         assert!(
-            !checker.config.enable_safety_checks,
+            !checker.get_config().enable_safety_checks,
             "Safety checks should be disabled"
         );
     }
@@ -350,10 +350,8 @@ mod safety_tests {
         checker.add_blacklisted_creator(test_creator);
         checker.add_blacklisted_keyword(test_keyword.to_string());
 
-        assert!(checker.blacklisted_creators.contains(&test_creator));
-        assert!(checker
-            .blacklisted_keywords
-            .contains(&test_keyword.to_string()));
+        assert!(checker.is_creator_blacklisted(&test_creator));
+        assert!(checker.is_keyword_blacklisted(&test_keyword));
     }
 
     #[tokio::test]
@@ -362,19 +360,19 @@ mod safety_tests {
         let edge_case_configs = vec![
             RugMonitorConfig {
                 liquidity_drop_threshold: 0.1, // Very sensitive
-                ..test_rug_monitor_config()
+                ..make_test_rug_monitor_config()
             },
             RugMonitorConfig {
                 liquidity_drop_threshold: 99.9, // Very insensitive
-                ..test_rug_monitor_config()
+                ..make_test_rug_monitor_config()
             },
             RugMonitorConfig {
                 check_interval_seconds: 1, // Very frequent
-                ..test_rug_monitor_config()
+                ..make_test_rug_monitor_config()
             },
             RugMonitorConfig {
                 monitoring_duration_minutes: 1, // Very short
-                ..test_rug_monitor_config()
+                ..make_test_rug_monitor_config()
             },
         ];
 

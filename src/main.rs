@@ -9,7 +9,7 @@ use solana_arbitrage_bot::utils::conversions::*;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
-use uuid;
+
 
 // Import from lib
 use solana_arbitrage_bot::*;

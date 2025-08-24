@@ -632,15 +632,12 @@ impl TransactionExecutor {
         };
 
         // Build instructions
-        let mut instructions = vec![];
-
-        // Add compute budget instruction
-        instructions.push(ComputeBudgetInstruction::set_compute_unit_price(
-            self.priority_fee,
-        ));
-
-        // Add compute unit limit
-        instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(300_000));
+        let instructions = vec![
+            // Add compute budget instruction
+            ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee),
+            // Add compute unit limit
+            ComputeBudgetInstruction::set_compute_unit_limit(300_000),
+        ];
 
         // Note: Real swap instructions would go here
         // This requires integration with Raydium/Orca SDKs

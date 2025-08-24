@@ -22,7 +22,7 @@ pub use executor::{TradeExecutor, TradeParams, TradeResult};
 pub use monitor::{NewToken, TokenMonitor};
 pub use position::{Position, PositionManager, SellAction};
 pub use rug_monitor::{MonitoredPosition, RugAlert, RugMonitor, RugMonitorConfig};
-pub use safety::{SafetyChecker, SafetyResult};
+pub use safety::{SafetyChecker, SafetyConfig, SafetyResult};
 
 // Enhanced exports (temporarily disabled)
 // pub use enhanced_detector::{EnhancedPoolDetector, EnhancedTokenLaunch};
@@ -38,59 +38,7 @@ use solana_sdk::signature::Keypair;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct SafetyConfig {
-    // Liquidity & Market Cap
-    pub min_liquidity_sol: f64,
-    pub max_market_cap_usd: f64,
 
-    // Taxes
-    pub max_buy_tax_percent: f64,
-    pub max_sell_tax_percent: f64,
-
-    // Token Age & Holders
-    pub max_token_age_minutes: u32,
-    pub min_holders: u32,
-    pub max_dev_percentage: f64,
-
-    // Blacklists
-    pub blacklist_mints: Vec<String>,
-    pub blacklisted_creators: Vec<String>,
-    pub blacklist_keywords: Vec<String>,
-
-    // API Endpoints
-    pub honeypot_api: Option<String>,
-    pub rugcheck_api: Option<String>,
-    pub helius_api_key: Option<String>, // DODANE: Dla lepszego wykrywania zagrożeń
-    pub enable_safety_checks: bool,
-}
-
-impl Default for SafetyConfig {
-    fn default() -> Self {
-        Self {
-            min_liquidity_sol: 3.0, // KRYTYCZNE: Minimalna płynność dla bezpieczeństwa
-            max_market_cap_usd: 100_000.0, // KRYTYCZNE: Ograniczenie market cap
-            max_buy_tax_percent: 5.0, // KRYTYCZNE: Maksymalny podatek kupna
-            max_sell_tax_percent: 5.0, // KRYTYCZNE: Maksymalny podatek sprzedaży
-            max_token_age_minutes: 8, // KRYTYCZNE: Tylko tokeny < 8 min (z config.yaml)
-            min_holders: 10,        // KRYTYCZNE: Minimalna liczba holderów
-            max_dev_percentage: 30.0, // KRYTYCZNE: Maksymalny % dewelopera
-            blacklist_mints: vec![],
-            blacklisted_creators: vec![],
-            blacklist_keywords: vec![
-                "test".to_string(),
-                "fake".to_string(),
-                "scam".to_string(),
-                "rug".to_string(),
-                "honeypot".to_string(),
-            ],
-            honeypot_api: Some("https://api.honeypot.is/v2/IsHoneypot".to_string()),
-            rugcheck_api: Some("https://api.rugcheck.xyz/v1/tokens".to_string()),
-            helius_api_key: None, // DODANE: Domyślnie None, można skonfigurować w config.yaml
-            enable_safety_checks: true, // KRYTYCZNE: Safety checks zawsze włączone
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct SniperConfig {

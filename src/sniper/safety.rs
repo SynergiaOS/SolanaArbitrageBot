@@ -1,9 +1,10 @@
 //! Safety Checker - Protects against honeypots and scams
 
-use crate::sniper::{NewToken, SafetyConfig};
+use crate::sniper::NewToken;
 use anyhow::{anyhow, Result};
 use log::{debug, info, warn};
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use serde_json;
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -15,6 +16,62 @@ use spl_token::state::Mint;
 use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SafetyConfig {
+    // Liquidity & Market Cap
+    pub min_liquidity_sol: f64,
+    pub max_market_cap_usd: f64,
+
+    // Taxes
+    pub max_buy_tax_percent: f64,
+    pub max_sell_tax_percent: f64,
+
+    // Token Age & Holders
+    pub max_token_age_minutes: u32,
+    pub min_holders: u32,
+    pub max_dev_percentage: f64,
+
+    // Blacklists
+    pub blacklist_mints: Vec<String>,
+    pub blacklisted_creators: Vec<String>,
+    pub blacklist_keywords: Vec<String>,
+
+    // API Configuration
+    pub honeypot_api: Option<String>,
+    pub rugcheck_api: Option<String>,
+    pub helius_api_key: Option<String>,
+
+    // Safety Settings
+    pub enable_safety_checks: bool,
+}
+
+impl Default for SafetyConfig {
+    fn default() -> Self {
+        Self {
+            min_liquidity_sol: 5.0,
+            max_market_cap_usd: 50_000.0,
+            max_buy_tax_percent: 10.0,
+            max_sell_tax_percent: 10.0,
+            max_token_age_minutes: 5,
+            min_holders: 20,
+            max_dev_percentage: 20.0,
+            blacklist_mints: vec![],
+            blacklisted_creators: vec![],
+            blacklist_keywords: vec![
+                "test".to_string(),
+                "fake".to_string(),
+                "scam".to_string(),
+                "rug".to_string(),
+                "honeypot".to_string(),
+            ],
+            honeypot_api: Some("https://api.honeypot.is/v2/IsHoneypot".to_string()),
+            rugcheck_api: Some("https://api.rugcheck.xyz/v1/tokens".to_string()),
+            helius_api_key: None,
+            enable_safety_checks: true,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum SafetyResult {
@@ -587,8 +644,7 @@ impl SafetyChecker {
         let base_url = self
             .config
             .honeypot_api
-            .as_ref()
-            .map(|s| s.as_str())
+            .as_deref()
             .unwrap_or("https://api.honeypot.is/v2/IsHoneypot");
         let url = format!("{}?address={}", base_url, mint);
 
@@ -616,8 +672,7 @@ impl SafetyChecker {
         let base_url = self
             .config
             .rugcheck_api
-            .as_ref()
-            .map(|s| s.as_str())
+            .as_deref()
             .unwrap_or("https://api.rugcheck.xyz/v1/tokens");
         let url = format!("{}/{}", base_url, mint);
         if let Ok(resp) = self.http_client.get(&url).send().await {
@@ -638,6 +693,21 @@ impl SafetyChecker {
 
     pub fn add_blacklisted_keyword(&mut self, keyword: String) {
         self.blacklisted_keywords.insert(keyword.to_lowercase());
+    }
+
+    /// Get safety configuration (read-only access)
+    pub fn get_config(&self) -> &SafetyConfig {
+        &self.config
+    }
+
+    /// Check if creator is blacklisted (read-only access)
+    pub fn is_creator_blacklisted(&self, creator: &Pubkey) -> bool {
+        self.blacklisted_creators.contains(creator)
+    }
+
+    /// Check if keyword is blacklisted (read-only access)
+    pub fn is_keyword_blacklisted(&self, keyword: &str) -> bool {
+        self.blacklisted_keywords.contains(&keyword.to_lowercase())
     }
 
     /// Enhanced token analysis using Helius API

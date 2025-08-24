@@ -387,4 +387,9 @@ impl RugMonitor {
 
         stats
     }
+
+    /// Get rug monitor configuration (read-only access)
+    pub fn get_config(&self) -> &RugMonitorConfig {
+        &self.config
+    }
 }

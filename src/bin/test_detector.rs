@@ -204,5 +204,5 @@ fn calculate_simple_score(token: &NewToken) -> f64 {
         score += 10.0; // Good size for sniping
     }
 
-    score.max(0.0).min(100.0)
+    score.clamp(0.0, 100.0)
 }
