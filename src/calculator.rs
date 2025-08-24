@@ -45,6 +45,7 @@ pub struct ProfitCalculator {
     // Pre-computed values for performance (avoid Decimal conversions)
     min_profit_percent_f64: f64,
     max_slippage_percent_f64: f64,
+    #[allow(dead_code)]
     dex_fee_percent_f64: f64,
     priority_fee_multiplier: f64,
     market_conditions: Option<MarketConditions>,

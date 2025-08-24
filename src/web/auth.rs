@@ -63,7 +63,7 @@ where
 
         // Check authentication if token is configured
         if let Some(ref expected_token) = self.auth_token {
-            if !is_authenticated(&request.headers(), expected_token) {
+            if !is_authenticated(request.headers(), expected_token) {
                 return Box::pin(async move {
                     Ok(Response::builder()
                         .status(StatusCode::UNAUTHORIZED)

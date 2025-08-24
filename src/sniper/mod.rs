@@ -32,7 +32,7 @@ pub use safety::{SafetyChecker, SafetyConfig, SafetyResult};
 
 use anyhow::Result;
 use log::{error, info, warn};
-use serde::Deserialize;
+
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::signature::Keypair;
 use std::sync::Arc;
@@ -74,9 +74,12 @@ impl Default for SniperConfig {
 }
 
 pub struct SniperEngine {
+    #[allow(dead_code)]
     keypair: Arc<Keypair>,
+    #[allow(dead_code)]
     rpc_client: Arc<RpcClient>,
     config: SniperConfig,
+    #[allow(dead_code)]
     safety_config: SafetyConfig,
     token_monitor: TokenMonitor,
     trade_executor: TradeExecutor,
@@ -238,7 +241,7 @@ impl SniperEngine {
                 self.position_manager.add_position(position.clone()).await;
 
                 // KRYTYCZNE: Rozpocznij monitoring rug pull po zakupie
-                let mut rug_monitor = self.rug_monitor.lock().await;
+                let rug_monitor = self.rug_monitor.lock().await;
                 if let Err(e) = rug_monitor.start_monitoring(position, token.clone()).await {
                     error!(
                         "❌ Failed to start rug monitoring for {}: {}",
@@ -304,7 +307,7 @@ impl SniperEngine {
         info!("🛡️ Starting rug pull monitoring...");
 
         loop {
-            let mut rug_monitor = self.rug_monitor.lock().await;
+            let rug_monitor = self.rug_monitor.lock().await;
             // Check all monitored positions for rug pull indicators
             match rug_monitor.check_all_positions().await {
                 Ok(alerts) => {

@@ -3,7 +3,7 @@
 //! Common types used across the sniper bot modules
 
 use serde::{Deserialize, Serialize};
-use solana_sdk::{pubkey::Pubkey, signature::Signature};
+use solana_sdk::signature::Signature;
 use std::collections::HashSet;
 use std::time::SystemTime;
 

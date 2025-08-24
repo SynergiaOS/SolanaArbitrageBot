@@ -187,6 +187,7 @@ struct SafetySection {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)]
 struct RiskSection {
     max_daily_loss_sol: Option<f64>,
     max_positions: Option<u32>,

@@ -5,13 +5,14 @@ use axum::{
         ws::{Message, WebSocket, WebSocketUpgrade},
         State,
     },
-    response::{IntoResponse, Response},
+    response::IntoResponse,
 };
 use futures_util::{sink::SinkExt, stream::StreamExt};
 use log::{debug, error, info, warn};
 
 // Security constants
 const MAX_MESSAGE_SIZE: usize = 2048; // 2KB max message size for enhanced WS
+#[allow(dead_code)]
 const MAX_MESSAGES_PER_MINUTE: u32 = 120; // Higher rate limit for enhanced features
 use serde_json;
 use std::collections::HashMap;
@@ -135,6 +136,7 @@ impl EnhancedWebSocketState {
     }
 
     /// Create a transaction request for a wallet
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_transaction_request(
         &self,
         wallet_address: String,
@@ -319,6 +321,7 @@ impl EnhancedWebSocketState {
 }
 
 /// Handle individual enhanced WebSocket connection
+#[allow(dead_code)]
 async fn enhanced_websocket_connection(socket: WebSocket, state: EnhancedWebSocketState) {
     info!("🔌 Enhanced WebSocket connection established");
 

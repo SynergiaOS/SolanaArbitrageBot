@@ -36,9 +36,11 @@ async fn test_safety_config_default() {
 
 #[tokio::test]
 async fn test_safety_checker_from_config_simple() {
-    let mut config = SafetyConfig::default();
-    config.min_liquidity_sol = 2.0;
-    config.max_buy_tax_percent = 3.0;
+    let config = SafetyConfig {
+        min_liquidity_sol: 2.0,
+        max_buy_tax_percent: 3.0,
+        ..Default::default()
+    };
 
     let rpc_client = create_mock_rpc_client();
     let checker = SafetyChecker::from_config(&config, rpc_client);
@@ -65,8 +67,10 @@ async fn test_safety_checker_from_config_simple() {
 
 #[tokio::test]
 async fn test_liquidity_check() {
-    let mut config = SafetyConfig::default();
-    config.min_liquidity_sol = 5.0; // 5 SOL minimum
+    let config = SafetyConfig {
+        min_liquidity_sol: 5.0, // 5 SOL minimum
+        ..Default::default()
+    };
 
     let rpc_client = create_mock_rpc_client();
     let checker = SafetyChecker::from_config(&config, rpc_client);
@@ -112,8 +116,10 @@ async fn test_liquidity_check() {
 
 #[tokio::test]
 async fn test_keyword_blacklist() {
-    let mut config = SafetyConfig::default();
-    config.blacklist_keywords = vec!["test".to_string(), "scam".to_string()];
+    let config = SafetyConfig {
+        blacklist_keywords: vec!["test".to_string(), "scam".to_string()],
+        ..Default::default()
+    };
 
     let rpc_client = create_mock_rpc_client();
     let checker = SafetyChecker::from_config(&config, rpc_client);
@@ -166,9 +172,11 @@ async fn test_keyword_blacklist() {
 #[tokio::test]
 async fn test_creator_blacklist() {
     let blacklisted_creator = "11111111111111111111111111111111";
-    let mut config = SafetyConfig::default();
-    config.blacklisted_creators = vec![blacklisted_creator.to_string()];
-    config.blacklist_keywords = vec![]; // Clear keywords to isolate test
+    let config = SafetyConfig {
+        blacklisted_creators: vec![blacklisted_creator.to_string()],
+        blacklist_keywords: vec![],
+        ..Default::default()
+    }; // Clear keywords to isolate test
 
     let rpc_client = create_mock_rpc_client();
     let checker = SafetyChecker::from_config(&config, rpc_client);
@@ -192,10 +200,12 @@ async fn test_creator_blacklist() {
 
 #[tokio::test]
 async fn test_safety_checks_disabled() {
-    let mut config = SafetyConfig::default();
-    config.enable_safety_checks = false;
-    config.min_liquidity_sol = 100.0; // Very high threshold
-    config.blacklist_keywords = vec!["test".to_string()];
+    let config = SafetyConfig {
+        enable_safety_checks: false,
+        min_liquidity_sol: 100.0, // Very high threshold
+        blacklist_keywords: vec!["test".to_string()],
+        ..Default::default()
+    };
 
     let rpc_client = create_mock_rpc_client();
     let checker = SafetyChecker::from_config(&config, rpc_client);
@@ -216,9 +226,11 @@ async fn test_safety_checks_disabled() {
 
 #[tokio::test]
 async fn test_api_endpoints_from_config() {
-    let mut config = SafetyConfig::default();
-    config.honeypot_api = Some("https://custom-honeypot-api.com/check".to_string());
-    config.rugcheck_api = Some("https://custom-rugcheck-api.com/tokens".to_string());
+    let config = SafetyConfig {
+        honeypot_api: Some("https://custom-honeypot-api.com/check".to_string()),
+        rugcheck_api: Some("https://custom-rugcheck-api.com/tokens".to_string()),
+        ..Default::default()
+    };
 
     let rpc_client = create_mock_rpc_client();
     let checker = SafetyChecker::from_config(&config, rpc_client);
@@ -290,9 +302,11 @@ async fn test_comprehensive_safety_flow() {
 async fn test_market_cap_check() {
     println!("🧪 Testing market cap check...");
 
-    let mut config = SafetyConfig::default();
-    config.max_market_cap_usd = 50_000.0; // $50k max
-    config.enable_safety_checks = true;
+    let config = SafetyConfig {
+        max_market_cap_usd: 50_000.0, // $50k max
+        enable_safety_checks: true,
+        ..Default::default()
+    };
 
     let rpc_client = create_mock_rpc_client();
     let checker = SafetyChecker::from_config(&config, rpc_client);
@@ -327,10 +341,12 @@ async fn test_market_cap_check() {
 async fn test_holder_count_check() {
     println!("🧪 Testing holder count check...");
 
-    let mut config = SafetyConfig::default();
-    config.min_holders = 50; // Require at least 50 holders
-    config.max_market_cap_usd = 0.0; // Disable market cap check
-    config.enable_safety_checks = true;
+    let config = SafetyConfig {
+        min_holders: 50, // Require at least 50 holders
+        max_market_cap_usd: 0.0, // Disable market cap check
+        enable_safety_checks: true,
+        ..Default::default()
+    };
 
     let rpc_client = create_mock_rpc_client();
     let checker = SafetyChecker::from_config(&config, rpc_client);
@@ -358,11 +374,13 @@ async fn test_holder_count_check() {
 async fn test_dev_percentage_check() {
     println!("🧪 Testing dev percentage check...");
 
-    let mut config = SafetyConfig::default();
-    config.max_dev_percentage = 20.0; // Max 20% dev concentration
-    config.max_market_cap_usd = 0.0; // Disable market cap check
-    config.min_holders = 0; // Disable holder check
-    config.enable_safety_checks = true;
+    let config = SafetyConfig {
+        max_dev_percentage: 20.0, // Max 20% dev concentration
+        max_market_cap_usd: 0.0, // Disable market cap check
+        min_holders: 0, // Disable holder check
+        enable_safety_checks: true,
+        ..Default::default()
+    };
 
     let rpc_client = create_mock_rpc_client();
     let checker = SafetyChecker::from_config(&config, rpc_client);
@@ -392,12 +410,14 @@ async fn test_dev_percentage_check() {
 async fn test_token_age_check() {
     println!("🧪 Testing token age check...");
 
-    let mut config = SafetyConfig::default();
-    config.max_token_age_minutes = 30; // Max 30 minutes old
-    config.max_market_cap_usd = 0.0; // Disable market cap check
-    config.min_holders = 0; // Disable holder check
-    config.max_dev_percentage = 0.0; // Disable dev percentage check
-    config.enable_safety_checks = true;
+    let config = SafetyConfig {
+        max_token_age_minutes: 30, // Max 30 minutes old
+        max_market_cap_usd: 0.0, // Disable market cap check
+        min_holders: 0, // Disable holder check
+        max_dev_percentage: 0.0, // Disable dev percentage check
+        enable_safety_checks: true,
+        ..Default::default()
+    };
 
     let rpc_client = create_mock_rpc_client();
     let checker = SafetyChecker::from_config(&config, rpc_client);
@@ -424,12 +444,14 @@ async fn test_token_age_check() {
 async fn test_all_new_filters_disabled() {
     println!("🧪 Testing all new filters disabled...");
 
-    let mut config = SafetyConfig::default();
-    config.max_market_cap_usd = 0.0; // Disable market cap check
-    config.min_holders = 0; // Disable holder check
-    config.max_dev_percentage = 0.0; // Disable dev percentage check
-    config.max_token_age_minutes = 0; // Disable token age check
-    config.enable_safety_checks = true;
+    let config = SafetyConfig {
+        max_market_cap_usd: 0.0, // Disable market cap check
+        min_holders: 0, // Disable holder check
+        max_dev_percentage: 0.0, // Disable dev percentage check
+        max_token_age_minutes: 0, // Disable token age check
+        enable_safety_checks: true,
+        ..Default::default()
+    };
 
     let rpc_client = create_mock_rpc_client();
     let checker = SafetyChecker::from_config(&config, rpc_client);
@@ -453,9 +475,11 @@ async fn test_all_new_filters_disabled() {
 async fn test_debug_safety_checker_reasons() {
     println!("🧪 Debug test - sprawdzanie powodów odrzucenia...");
 
-    let mut config = SafetyConfig::default();
-    config.min_liquidity_sol = 100.0; // Bardzo wysoki próg
-    config.enable_safety_checks = true;
+    let config = SafetyConfig {
+        min_liquidity_sol: 100.0, // Bardzo wysoki próg
+        enable_safety_checks: true,
+        ..Default::default()
+    };
 
     let rpc_client = create_mock_rpc_client();
     let checker = SafetyChecker::from_config(&config, rpc_client);
@@ -493,10 +517,12 @@ async fn test_debug_safety_checker_reasons() {
 
 #[tokio::test]
 async fn test_safety_checker_from_config() {
-    let mut config = SafetyConfig::default();
-    config.min_liquidity_sol = 2.0;
-    config.max_buy_tax_percent = 3.0;
-    config.blacklisted_creators = vec!["11111111111111111111111111111111".to_string()];
+    let config = SafetyConfig {
+        min_liquidity_sol: 2.0,
+        max_buy_tax_percent: 3.0,
+        blacklisted_creators: vec!["11111111111111111111111111111111".to_string()],
+        ..Default::default()
+    };
 
     let rpc_client = create_mock_rpc_client();
     let checker = SafetyChecker::from_config(&config, rpc_client);

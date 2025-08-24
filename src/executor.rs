@@ -27,7 +27,9 @@ const SOL_MINT: &str = "So11111111111111111111111111111111111111112";
 const USDC_MINT: &str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
 // DEX Program IDs
+#[allow(dead_code)]
 const RAYDIUM_V4: &str = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
+#[allow(dead_code)]
 const ORCA_WHIRLPOOL: &str = "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc";
 
 pub enum WalletType {
@@ -95,7 +97,9 @@ struct SwapInfo {
 #[derive(Debug, Deserialize)]
 struct JupiterSwapResponse {
     swap_transaction: String,
+    #[allow(dead_code)]
     last_valid_block_height: u64,
+    #[allow(dead_code)]
     prioritization_fee: Option<u64>,
 }
 
@@ -460,6 +464,7 @@ impl TransactionExecutor {
         Ok(quote)
     }
 
+    #[allow(dead_code)]
     async fn build_jupiter_swap_transaction(
         &self,
         quote: JupiterQuoteResponse,
@@ -636,7 +641,7 @@ impl TransactionExecutor {
     // Fallback method: Build custom swap instructions (without Jupiter)
     pub async fn execute_direct_swap(
         &self,
-        opportunity: &ArbitrageOpportunity,
+        _opportunity: &ArbitrageOpportunity,
     ) -> Result<Signature> {
         info!("🔄 Executing direct DEX swap (fallback method)");
 

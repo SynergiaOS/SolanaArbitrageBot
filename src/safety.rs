@@ -124,6 +124,7 @@ pub struct SafetyGuard {
 struct TradeRecord {
     timestamp: DateTime<Utc>,
     profit_usd: f64,
+    #[allow(dead_code)]
     amount_sol: f64,
     success: bool,
 }

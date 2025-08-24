@@ -216,14 +216,16 @@ mod safety_tests {
         let unsafe_result = SafetyResult::Unsafe("Test reason".to_string());
 
         match safe_result {
-            SafetyResult::Safe => assert!(true, "Safe result should match Safe variant"),
+            SafetyResult::Safe => {
+                // Test passed - expected Safe result
+            },
             SafetyResult::Unsafe(_) => {
-                assert!(false, "Safe result should not match Unsafe variant")
+                panic!("Safe result should not match Unsafe variant")
             }
         }
 
         match unsafe_result {
-            SafetyResult::Safe => assert!(false, "Unsafe result should not match Safe variant"),
+            SafetyResult::Safe => panic!("Unsafe result should not match Safe variant"),
             SafetyResult::Unsafe(reason) => assert_eq!(reason, "Test reason"),
         }
     }
@@ -255,8 +257,8 @@ mod safety_tests {
             assert!(
                 config.min_liquidity_sol < 0.0
                     || config.max_market_cap_usd <= 0.0
-                    || config.max_token_age_minutes <= 0
-                    || config.min_holders <= 0,
+                    || config.max_token_age_minutes == 0
+                    || config.min_holders == 0,
                 "Invalid config should be detected"
             );
         }
@@ -351,7 +353,7 @@ mod safety_tests {
         checker.add_blacklisted_keyword(test_keyword.to_string());
 
         assert!(checker.is_creator_blacklisted(&test_creator));
-        assert!(checker.is_keyword_blacklisted(&test_keyword));
+        assert!(checker.is_keyword_blacklisted(test_keyword));
     }
 
     #[tokio::test]

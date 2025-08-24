@@ -15,6 +15,7 @@ use super::{server::AppState, WebSocketMessage};
 
 // Security constants
 const MAX_MESSAGE_SIZE: usize = 1024; // 1KB max message size
+#[allow(dead_code)]
 const MAX_MESSAGES_PER_MINUTE: u32 = 60; // Rate limiting
 const WEBSOCKET_TIMEOUT: Duration = Duration::from_secs(300); // 5 minute timeout
 

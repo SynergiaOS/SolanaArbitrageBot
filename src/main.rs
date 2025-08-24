@@ -210,18 +210,14 @@ async fn main() -> Result<()> {
     }
 
     // Start web server in background
-    let web_handle = if let Some(web_server) = web_server {
-        Some(tokio::spawn(async move {
+    let _web_handle = web_server.map(|web_server| tokio::spawn(async move {
             if let Err(e) = web_server.start().await {
                 error!("Web server error: {}", e);
             }
-        }))
-    } else {
-        None
-    };
+        }));
 
     // Start monitoring in background
-    let monitor_handle = tokio::spawn(async move {
+    let _monitor_handle = tokio::spawn(async move {
         if let Err(e) = monitor.start_monitoring().await {
             error!("Monitor error: {}", e);
         }
@@ -230,7 +226,7 @@ async fn main() -> Result<()> {
     // Start price update handler
     let discord_clone = discord.clone();
     let websocket_tx_clone = websocket_tx.clone();
-    let price_handler = tokio::spawn(async move {
+    let _price_handler = tokio::spawn(async move {
         let mut last_discord_update = std::time::Instant::now();
         let mut raydium_price = Decimal::ZERO;
         let mut orca_price = Decimal::ZERO;

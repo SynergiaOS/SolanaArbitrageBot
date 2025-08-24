@@ -604,7 +604,7 @@ impl SafetyChecker {
             .get_account_with_commitment(mint, CommitmentConfig::confirmed())
             .await?;
 
-        if let Some(account) = account_info.value {
+        if let Some(_account) = account_info.value {
             // Get current slot
             let current_slot = self.rpc_client.get_slot().await?;
 
@@ -858,7 +858,7 @@ impl SafetyChecker {
             // Analyze transaction patterns
             let mut large_transfers = 0;
             let mut rapid_trades = 0;
-            let mut wash_trades = 0;
+            let wash_trades = 0;
 
             for tx in transactions {
                 if let Some(amount) = tx.get("amount").and_then(|v| v.as_f64()) {
@@ -869,7 +869,7 @@ impl SafetyChecker {
                 }
 
                 // Check for rapid trading patterns
-                if let Some(timestamp) = tx.get("timestamp").and_then(|v| v.as_u64()) {
+                if let Some(_timestamp) = tx.get("timestamp").and_then(|v| v.as_u64()) {
                     // This would need more sophisticated analysis
                     // For now, just count transactions
                     rapid_trades += 1;

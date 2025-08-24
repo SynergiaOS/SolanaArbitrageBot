@@ -24,6 +24,7 @@ pub struct PriceUpdate {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct RaydiumPoolState {
     pub base_reserve: u64,
     pub quote_reserve: u64,
@@ -31,6 +32,7 @@ struct RaydiumPoolState {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct OrcaWhirlpoolState {
     pub sqrt_price: u128,
     pub liquidity: u128,
@@ -40,7 +42,9 @@ struct OrcaWhirlpoolState {
 pub struct DexMonitor {
     raydium_price: Arc<Mutex<Option<Decimal>>>,
     orca_price: Arc<Mutex<Option<Decimal>>>,
+    #[allow(dead_code)]
     rpc_url: String,
+    #[allow(dead_code)]
     ws_url: String,
     price_updates_tx: Option<tokio::sync::mpsc::Sender<PriceUpdate>>,
     raydium_pool: String,
@@ -173,6 +177,7 @@ impl DexMonitor {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn monitor_raydium_optimized(
         price_state: Arc<Mutex<Option<Decimal>>>,
         http_client: reqwest::Client,
@@ -272,6 +277,7 @@ impl DexMonitor {
         Err(anyhow::anyhow!("Failed to parse price from API response"))
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn monitor_orca_optimized(
         price_state: Arc<Mutex<Option<Decimal>>>,
         http_client: reqwest::Client,

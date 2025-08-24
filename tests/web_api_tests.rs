@@ -34,7 +34,7 @@ impl log::Log for TestLogger {
 static TEST_LOGGER: OnceLock<&'static TestLogger> = OnceLock::new();
 fn ensure_logger() -> &'static TestLogger {
     if let Some(l) = TEST_LOGGER.get() {
-        return *l;
+        return l;
     }
     let logger = Box::leak(Box::new(TestLogger {
         lines: Mutex::new(Vec::new()),

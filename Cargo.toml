@@ -85,9 +85,10 @@ path = "src/bin/sniper.rs"
 name = "historical_backtest"
 path = "src/bin/historical_backtest.rs"
 
-[[bin]]
-name = "enhanced_arbitrage_bot"
-path = "src/bin/enhanced_arbitrage_bot.rs"
+# Disabled - missing required modules
+# [[bin]]
+# name = "enhanced_arbitrage_bot"
+# path = "src/bin/enhanced_arbitrage_bot.rs"
 
 [profile.release]
 opt-level = 3

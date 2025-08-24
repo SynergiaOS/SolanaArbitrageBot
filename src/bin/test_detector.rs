@@ -30,7 +30,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // Create detector
-    let mut detector = TokenDetector::new(config)?;
+    let detector = TokenDetector::new(config)?;
 
     info!("✅ Token detector created successfully");
 
