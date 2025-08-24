@@ -152,7 +152,8 @@ impl ProfitCalculator {
         let net_profit_usd = gross_profit_usd - total_costs;
 
         // Fast confidence score (simplified)
-        let confidence = self.calculate_confidence_score(spread_percent, position_sol, net_profit_usd);
+        let confidence =
+            self.calculate_confidence_score(spread_percent, position_sol, net_profit_usd);
 
         // Update performance tracking
         self.calculation_count += 1;
@@ -177,7 +178,6 @@ impl ProfitCalculator {
             None // Removed debug log for performance
         }
     }
-
 
     fn calculate_optimal_size(
         &self,
@@ -214,8 +214,6 @@ impl ProfitCalculator {
         let max_sol_from_usd = MAX_USD_POSITION / avg_price;
         base_size.min(max_sol_from_usd).min(max_position)
     }
-
-
 
     fn estimate_price_impact(&self, amount_sol: f64, _price: f64) -> f64 {
         // Simplified price impact estimation
