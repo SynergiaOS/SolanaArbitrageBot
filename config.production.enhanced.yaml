@@ -104,9 +104,9 @@ safety:
   daily_report_required: true   # Generate daily reports
 
 discord:
-  # Production alerts
-  webhook_url: "YOUR_DISCORD_WEBHOOK_URL"
-  enable_alerts: true
+  # Production alerts (from environment)
+  webhook_url: "${DISCORD_WEBHOOK_URL}"
+  enable_alerts: ${DISCORD_ENABLED:true}
   
   # Alert types
   alert_on_trades: true

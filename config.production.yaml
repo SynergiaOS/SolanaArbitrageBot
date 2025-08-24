@@ -8,11 +8,11 @@ rpc:
   ws_url: "wss://api.mainnet-beta.solana.com"
 
 wallet:
-  # Path to keypair. DO NOT COMMIT REAL KEYS.
+  # Hardware wallet is mandatory in production
+  use_ledger: true
   path: "./wallet.json"                            # BACKUP ONLY - DO NOT USE!
-  use_ledger: true                                 # PRODUCTION: ALWAYS USE LEDGER!
   ledger_path: "44'/501'/0'/0'"                   # Derivation path
-  ledger_address: "9PdJZJh33TsMB6s3DuhSXYCSpUiM3oBqyuno2aLvYTk"  # AKTYWNY adres Ledger (0.18992 SOL)
+  ledger_address: "9PdJZJh33TsMB6s3DuhSXYCSpUiM3oBqyuno2aLvYTk"  # Active Ledger address
 
 # DEX programs (mainnet)
 dex:
@@ -47,8 +47,8 @@ web:
 
 # Optional: Discord alerts (prefer ENV overrides)
 discord:
-  enabled: true
-  webhook_url: ""   # Set DISCORD_WEBHOOK_URL env
+  enabled: ${DISCORD_ENABLED:true}
+  webhook_url: "${DISCORD_WEBHOOK_URL}"   # Set DISCORD_WEBHOOK_URL env
   alert_on_profit: true
   alert_on_error: true
   alert_on_startup: true
