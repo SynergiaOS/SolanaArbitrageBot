@@ -10,7 +10,6 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
 
-
 // Import from lib
 use solana_arbitrage_bot::*;
 
@@ -210,11 +209,13 @@ async fn main() -> Result<()> {
     }
 
     // Start web server in background
-    let _web_handle = web_server.map(|web_server| tokio::spawn(async move {
+    let _web_handle = web_server.map(|web_server| {
+        tokio::spawn(async move {
             if let Err(e) = web_server.start().await {
                 error!("Web server error: {}", e);
             }
-        }));
+        })
+    });
 
     // Start monitoring in background
     let _monitor_handle = tokio::spawn(async move {

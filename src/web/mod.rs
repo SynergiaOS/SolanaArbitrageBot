@@ -5,10 +5,10 @@ pub mod auth;
 pub mod database;
 pub mod enhanced_websocket;
 pub mod handlers;
-pub mod mock_sniper;
-pub mod server;
-pub mod rate_limit;
 pub mod metrics;
+pub mod mock_sniper;
+pub mod rate_limit;
+pub mod server;
 pub mod websocket;
 
 pub use database::Database;
@@ -33,7 +33,6 @@ pub struct RateLimitsConfig {
     pub config_per_ip_per_minute: Option<u64>,
     pub status_per_ip_per_minute: Option<u64>,
 }
-
 
 /// Configuration for the web dashboard
 #[derive(Debug, Clone, Deserialize)]

@@ -9,15 +9,24 @@ use std::task::{Context, Poll};
 use tower::{Layer, Service};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
-pub enum Role { Admin, Config, Status, Other }
-
-pub fn required_role(path: &str) -> Role {
-    if path.starts_with("/api/control/") { Role::Admin }
-    else if path == "/api/config" { Role::Config }
-    else if path == "/api/status" || path == "/api/transactions" { Role::Status }
-    else { Role::Other }
+pub enum Role {
+    Admin,
+    Config,
+    Status,
+    Other,
 }
 
+pub fn required_role(path: &str) -> Role {
+    if path.starts_with("/api/control/") {
+        Role::Admin
+    } else if path == "/api/config" {
+        Role::Config
+    } else if path == "/api/status" || path == "/api/transactions" {
+        Role::Status
+    } else {
+        Role::Other
+    }
+}
 
 /// Authentication middleware layer
 #[derive(Clone)]
@@ -37,7 +46,13 @@ impl AuthLayer {
         status_api_key: Option<String>,
         control_ip_allowlist: Option<Vec<cidr::AnyIpCidr>>,
     ) -> Self {
-        Self { default_token, admin_api_key, config_api_key, status_api_key, control_ip_allowlist }
+        Self {
+            default_token,
+            admin_api_key,
+            config_api_key,
+            status_api_key,
+            control_ip_allowlist,
+        }
     }
 }
 
@@ -99,7 +114,9 @@ where
             if let Some(ref cidrs) = self.control_ip_allowlist {
                 // Get IP via X-Real-IP/XFF fallback (same as limiter logic)
                 let ip = crate::web::rate_limit::extract_ip(&headers, &request);
-                let allowed = ip.map(|ip| cidrs.iter().any(|c| c.contains(&ip))).unwrap_or(false);
+                let allowed = ip
+                    .map(|ip| cidrs.iter().any(|c| c.contains(&ip)))
+                    .unwrap_or(false);
                 if !allowed {
                     return Box::pin(async move {
                         Ok(Response::builder()
@@ -112,18 +129,38 @@ where
         }
 
         let authed = match required {
-            Role::Admin => self.admin_api_key.as_deref().map(|key| is_authenticated(&headers, key)).unwrap_or(false),
-            Role::Config => self.config_api_key.as_deref().map(|key| is_authenticated(&headers, key))
-                .or_else(|| self.default_token.as_deref().map(|k| is_authenticated(&headers, k)))
+            Role::Admin => self
+                .admin_api_key
+                .as_deref()
+                .map(|key| is_authenticated(&headers, key))
                 .unwrap_or(false),
-            Role::Status => self.status_api_key.as_deref().map(|key| is_authenticated(&headers, key))
-                .or_else(|| self.default_token.as_deref().map(|k| is_authenticated(&headers, k)))
+            Role::Config => self
+                .config_api_key
+                .as_deref()
+                .map(|key| is_authenticated(&headers, key))
+                .or_else(|| {
+                    self.default_token
+                        .as_deref()
+                        .map(|k| is_authenticated(&headers, k))
+                })
+                .unwrap_or(false),
+            Role::Status => self
+                .status_api_key
+                .as_deref()
+                .map(|key| is_authenticated(&headers, key))
+                .or_else(|| {
+                    self.default_token
+                        .as_deref()
+                        .map(|k| is_authenticated(&headers, k))
+                })
                 .unwrap_or(false),
 
-
-        // fallthrough for match continues below
-
-            Role::Other => self.default_token.as_deref().map(|k| is_authenticated(&headers, k)).unwrap_or(true),
+            // fallthrough for match continues below
+            Role::Other => self
+                .default_token
+                .as_deref()
+                .map(|k| is_authenticated(&headers, k))
+                .unwrap_or(true),
         };
 
         if !authed {
@@ -142,8 +179,12 @@ where
 
 /// Check if the endpoint is public (doesn't require authentication)
 fn is_public_endpoint(path: &str) -> bool {
-    if path == "/" || path == "/health" || path == "/metrics" { return true; }
-    if path.starts_with("/static") { return true; }
+    if path == "/" || path == "/health" || path == "/metrics" {
+        return true;
+    }
+    if path.starts_with("/static") {
+        return true;
+    }
     false
 }
 
@@ -171,21 +212,17 @@ fn is_authenticated(headers: &HeaderMap, expected_token: &str) -> bool {
 
 /// Helper function to create auth middleware
 pub fn auth_middleware_from_config(cfg: &crate::web::WebConfig) -> AuthLayer {
-
     let ak = cfg.api_keys.as_ref();
     let admin = ak.and_then(|a| a.admin_api_key.clone());
     let config = ak.and_then(|a| a.config_api_key.clone());
     let status = ak.and_then(|a| a.status_api_key.clone());
     let default = cfg.auth_token.clone();
 
-    let allowlist = cfg
-        .control_ip_allowlist
-        .as_ref()
-        .map(|v| {
-            v.iter()
-                .filter_map(|s| s.parse::<cidr::AnyIpCidr>().ok())
-                .collect::<Vec<_>>()
-        });
+    let allowlist = cfg.control_ip_allowlist.as_ref().map(|v| {
+        v.iter()
+            .filter_map(|s| s.parse::<cidr::AnyIpCidr>().ok())
+            .collect::<Vec<_>>()
+    });
 
     AuthLayer::new(default, admin, config, status, allowlist)
 }

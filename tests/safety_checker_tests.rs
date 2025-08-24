@@ -342,7 +342,7 @@ async fn test_holder_count_check() {
     println!("🧪 Testing holder count check...");
 
     let config = SafetyConfig {
-        min_holders: 50, // Require at least 50 holders
+        min_holders: 50,         // Require at least 50 holders
         max_market_cap_usd: 0.0, // Disable market cap check
         enable_safety_checks: true,
         ..Default::default()
@@ -376,8 +376,8 @@ async fn test_dev_percentage_check() {
 
     let config = SafetyConfig {
         max_dev_percentage: 20.0, // Max 20% dev concentration
-        max_market_cap_usd: 0.0, // Disable market cap check
-        min_holders: 0, // Disable holder check
+        max_market_cap_usd: 0.0,  // Disable market cap check
+        min_holders: 0,           // Disable holder check
         enable_safety_checks: true,
         ..Default::default()
     };
@@ -412,9 +412,9 @@ async fn test_token_age_check() {
 
     let config = SafetyConfig {
         max_token_age_minutes: 30, // Max 30 minutes old
-        max_market_cap_usd: 0.0, // Disable market cap check
-        min_holders: 0, // Disable holder check
-        max_dev_percentage: 0.0, // Disable dev percentage check
+        max_market_cap_usd: 0.0,   // Disable market cap check
+        min_holders: 0,            // Disable holder check
+        max_dev_percentage: 0.0,   // Disable dev percentage check
         enable_safety_checks: true,
         ..Default::default()
     };
@@ -445,9 +445,9 @@ async fn test_all_new_filters_disabled() {
     println!("🧪 Testing all new filters disabled...");
 
     let config = SafetyConfig {
-        max_market_cap_usd: 0.0, // Disable market cap check
-        min_holders: 0, // Disable holder check
-        max_dev_percentage: 0.0, // Disable dev percentage check
+        max_market_cap_usd: 0.0,  // Disable market cap check
+        min_holders: 0,           // Disable holder check
+        max_dev_percentage: 0.0,  // Disable dev percentage check
         max_token_age_minutes: 0, // Disable token age check
         enable_safety_checks: true,
         ..Default::default()

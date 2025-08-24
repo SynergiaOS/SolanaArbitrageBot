@@ -1,8 +1,11 @@
 use axum::{extract::Request, response::Response};
-use prometheus::{Encoder, HistogramVec, IntCounterVec, IntCounter, Opts, TextEncoder, register_histogram_vec, register_int_counter, register_int_counter_vec};
+use prometheus::{
+    register_histogram_vec, register_int_counter, register_int_counter_vec, Encoder, HistogramVec,
+    IntCounter, IntCounterVec, Opts, TextEncoder,
+};
 use std::task::{Context, Poll};
-use tower::{Layer, Service};
 use std::time::Instant;
+use tower::{Layer, Service};
 
 #[derive(Clone)]
 pub struct MetricsLayer;
@@ -20,11 +23,18 @@ pub struct MetricsMiddleware<S> {
 }
 
 fn endpoint_category(path: &str) -> &'static str {
-    if path.starts_with("/api/control/") { "control" }
-    else if path == "/api/config" { "config" }
-    else if path == "/api/status" || path == "/api/transactions" { "status" }
-    else if path == "/metrics" || path == "/health" || path.starts_with("/static") || path == "/" { "public" }
-    else { "other" }
+    if path.starts_with("/api/control/") {
+        "control"
+    } else if path == "/api/config" {
+        "config"
+    } else if path == "/api/status" || path == "/api/transactions" {
+        "status"
+    } else if path == "/metrics" || path == "/health" || path.starts_with("/static") || path == "/"
+    {
+        "public"
+    } else {
+        "other"
+    }
 }
 
 // Global metrics (default registry)
@@ -60,7 +70,9 @@ where
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+    type Future = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+    >;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
@@ -76,8 +88,12 @@ where
         Box::pin(async move {
             let resp = fut.await?;
             let status = resp.status().as_u16();
-            HTTP_REQUESTS_TOTAL.with_label_values(&[method.as_str(), endpoint, &status.to_string()]).inc();
-            HTTP_REQUEST_DURATION_SECONDS.with_label_values(&[endpoint]).observe(start.elapsed().as_secs_f64());
+            HTTP_REQUESTS_TOTAL
+                .with_label_values(&[method.as_str(), endpoint, &status.to_string()])
+                .inc();
+            HTTP_REQUEST_DURATION_SECONDS
+                .with_label_values(&[endpoint])
+                .observe(start.elapsed().as_secs_f64());
             Ok(resp)
         })
     }
@@ -96,6 +112,7 @@ pub async fn metrics_handler() -> Response {
 }
 
 pub fn record_rate_limited(endpoint: &str) {
-    HTTP_REQUESTS_RATE_LIMITED_TOTAL.with_label_values(&[endpoint]).inc();
+    HTTP_REQUESTS_RATE_LIMITED_TOTAL
+        .with_label_values(&[endpoint])
+        .inc();
 }
-

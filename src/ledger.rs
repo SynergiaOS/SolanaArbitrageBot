@@ -142,7 +142,11 @@ impl LedgerConnection {
         match self.sign_message(&message) {
             Ok(signature) => {
                 info!("✅ Signing test successful");
-                info!("Test signature: {}...{}", &signature.to_string()[..8], &signature.to_string()[signature.to_string().len()-8..]);
+                info!(
+                    "Test signature: {}...{}",
+                    &signature.to_string()[..8],
+                    &signature.to_string()[signature.to_string().len() - 8..]
+                );
                 Ok(())
             }
             Err(e) => {
@@ -163,7 +167,10 @@ impl LedgerConnection {
             - Wallet Type: Ledger Hardware Wallet\n\
             - Timeout: {:?}\n\
             - Status: Connected",
-            &pubkey_str[..8], &pubkey_str[pubkey_str.len()-8..], self.derivation_path, self.timeout_duration
+            &pubkey_str[..8],
+            &pubkey_str[pubkey_str.len() - 8..],
+            self.derivation_path,
+            self.timeout_duration
         )
     }
 

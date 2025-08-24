@@ -61,7 +61,10 @@ impl std::fmt::Debug for SafetyConfig {
             .field("blacklist_keywords", &self.blacklist_keywords)
             .field("honeypot_api", &self.honeypot_api)
             .field("rugcheck_api", &self.rugcheck_api)
-            .field("helius_api_key", &self.helius_api_key.as_ref().map(|_| "***MASKED***"))
+            .field(
+                "helius_api_key",
+                &self.helius_api_key.as_ref().map(|_| "***MASKED***"),
+            )
             .field("enable_safety_checks", &self.enable_safety_checks)
             .finish()
     }

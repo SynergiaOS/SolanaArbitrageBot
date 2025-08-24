@@ -1,6 +1,5 @@
 use std::sync::Mutex;
 
-
 use axum::http::{Request, StatusCode};
 use axum::{routing::get, Router};
 
@@ -80,4 +79,3 @@ async fn no_sensitive_keywords_in_logs_for_basic_requests() {
         );
     }
 }
-

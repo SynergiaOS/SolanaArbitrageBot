@@ -173,7 +173,8 @@ impl TransactionExecutor {
         if requested > cap {
             return Err(anyhow!(
                 "Priority fee {} exceeds cap {} (lamports)",
-                requested, cap
+                requested,
+                cap
             ));
         }
 
@@ -225,16 +226,16 @@ impl TransactionExecutor {
             .map_err(|e| anyhow!("Failed to read wallet from {}: {}", path, e))?;
 
         // Try parsing as JSON array
-        let mut wallet_bytes: Vec<u8> = if let Ok(bytes) = serde_json::from_str::<Vec<u8>>(&wallet_str)
-        {
-            bytes
-        } else if let Ok(bytes) = serde_json::from_str::<Vec<i8>>(&wallet_str) {
-            // Handle signed bytes (convert i8 to u8)
-            bytes.into_iter().map(|b| b as u8).collect()
-        } else {
-            // Try base58 or other formats
-            return Err(anyhow!("Invalid wallet format in {}", path));
-        };
+        let mut wallet_bytes: Vec<u8> =
+            if let Ok(bytes) = serde_json::from_str::<Vec<u8>>(&wallet_str) {
+                bytes
+            } else if let Ok(bytes) = serde_json::from_str::<Vec<i8>>(&wallet_str) {
+                // Handle signed bytes (convert i8 to u8)
+                bytes.into_iter().map(|b| b as u8).collect()
+            } else {
+                // Try base58 or other formats
+                return Err(anyhow!("Invalid wallet format in {}", path));
+            };
 
         // Clear sensitive data from memory
         wallet_str.clear();
@@ -248,12 +249,11 @@ impl TransactionExecutor {
             ));
         }
 
-        let wallet = Keypair::try_from(&wallet_bytes[..])
-            .map_err(|e| {
-                // Clear sensitive data before returning error
-                wallet_bytes.fill(0);
-                anyhow!("Invalid wallet format: {}", e)
-            })?;
+        let wallet = Keypair::try_from(&wallet_bytes[..]).map_err(|e| {
+            // Clear sensitive data before returning error
+            wallet_bytes.fill(0);
+            anyhow!("Invalid wallet format: {}", e)
+        })?;
 
         // Clear sensitive data from memory
         wallet_bytes.fill(0);
@@ -667,7 +667,9 @@ impl TransactionExecutor {
         // Build instructions
         let instructions = vec![
             // Enforce runtime cap for compute unit price
-            ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee.min(self.max_priority_fee)),
+            ComputeBudgetInstruction::set_compute_unit_price(
+                self.priority_fee.min(self.max_priority_fee),
+            ),
             // Add compute unit limit
             ComputeBudgetInstruction::set_compute_unit_limit(300_000),
         ];

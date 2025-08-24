@@ -1,11 +1,30 @@
-use solana_arbitrage_bot::{executor::TransactionExecutor, Config, DexConfig, DexInfo, ExecutionConfig, LimitsConfig, RpcConfig, WalletConfig};
 use rust_decimal::Decimal;
+use solana_arbitrage_bot::{
+    executor::TransactionExecutor, Config, DexConfig, DexInfo, ExecutionConfig, LimitsConfig,
+    RpcConfig, WalletConfig,
+};
 
 fn base_config_with_fee(priority: u64, cap: Option<u64>) -> Config {
     Config {
-        rpc: RpcConfig { url: "http://localhost".into(), ws_url: "ws://localhost".into() },
-        wallet: WalletConfig { path: "./wallet.json".into(), use_ledger: None, ledger_path: None },
-        dex: DexConfig { raydium: DexInfo { program_id: "".into(), sol_usdc_pool: "".into() }, orca: DexInfo { program_id: "".into(), sol_usdc_pool: "".into() } },
+        rpc: RpcConfig {
+            url: "http://localhost".into(),
+            ws_url: "ws://localhost".into(),
+        },
+        wallet: WalletConfig {
+            path: "./wallet.json".into(),
+            use_ledger: None,
+            ledger_path: None,
+        },
+        dex: DexConfig {
+            raydium: DexInfo {
+                program_id: "".into(),
+                sol_usdc_pool: "".into(),
+            },
+            orca: DexInfo {
+                program_id: "".into(),
+                sol_usdc_pool: "".into(),
+            },
+        },
         limits: LimitsConfig {
             max_position_sol: Decimal::from_f64_retain(0.05).unwrap(),
             min_profit_percent: Decimal::from_f64_retain(0.3).unwrap(),
@@ -28,11 +47,12 @@ fn base_config_with_fee(priority: u64, cap: Option<u64>) -> Config {
 fn priority_fee_above_cap_is_rejected() {
     // Here priority fee is above cap; constructor should return Err
     let cfg = base_config_with_fee(200_001, Some(50_000));
-    let err = TransactionExecutor::new(&cfg, true).err().expect("expected error");
+    let err = TransactionExecutor::new(&cfg, true)
+        .err()
+        .expect("expected error");
     let msg = format!("{}", err);
     assert!(msg.contains("exceeds cap"), "unexpected error: {msg}");
 }
-
 
 #[test]
 fn priority_fee_is_capped_at_runtime() {
@@ -62,4 +82,3 @@ fn priority_fee_is_capped_at_runtime() {
         assert!(res.is_ok());
     });
 }
-

@@ -340,7 +340,11 @@ async fn enhanced_websocket_connection(socket: WebSocket, state: EnhancedWebSock
                 Ok(Message::Text(text)) => {
                     // Validate message size
                     if text.len() > MAX_MESSAGE_SIZE {
-                        warn!("Enhanced WebSocket message too large: {} bytes (max: {})", text.len(), MAX_MESSAGE_SIZE);
+                        warn!(
+                            "Enhanced WebSocket message too large: {} bytes (max: {})",
+                            text.len(),
+                            MAX_MESSAGE_SIZE
+                        );
 
                         // Send error response for oversized message
                         let error_msg = EnhancedWebSocketMessage::Error {

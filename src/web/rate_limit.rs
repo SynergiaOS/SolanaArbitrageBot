@@ -84,7 +84,13 @@ impl<S> RateLimitMiddleware<S> {
     ) -> Self {
         Self {
             inner,
-            shards: Arc::new((0..SHARDS).map(|_| Shard { map: Arc::new(Mutex::new(HashMap::new())) }).collect()),
+            shards: Arc::new(
+                (0..SHARDS)
+                    .map(|_| Shard {
+                        map: Arc::new(Mutex::new(HashMap::new())),
+                    })
+                    .collect(),
+            ),
             default_per_min,
             control_per_min,
             config_per_min,
@@ -92,7 +98,6 @@ impl<S> RateLimitMiddleware<S> {
             window,
             last_cleanup: Arc::new(Mutex::new(Instant::now())),
         }
-
     }
 }
 
@@ -112,14 +117,24 @@ fn shard_index(ip: &IpAddr, endpoint: &'static str) -> usize {
 }
 
 fn endpoint_category(path: &str) -> &'static str {
-    if path.starts_with("/api/control/") { "control" }
-    else if path == "/api/config" { "config" }
-    else if path == "/api/status" || path == "/api/transactions" { "status" }
-    else if path == "/metrics" || path == "/health" || path.starts_with("/static") || path == "/" { "public" }
-    else { "other" }
+    if path.starts_with("/api/control/") {
+        "control"
+    } else if path == "/api/config" {
+        "config"
+    } else if path == "/api/status" || path == "/api/transactions" {
+        "status"
+    } else if path == "/metrics" || path == "/health" || path.starts_with("/static") || path == "/"
+    {
+        "public"
+    } else {
+        "other"
+    }
 }
 
-fn limit_for_category(mw: &RateLimitMiddleware<impl Service<Request, Response = Response>> , cat: &str) -> Option<u64> {
+fn limit_for_category(
+    mw: &RateLimitMiddleware<impl Service<Request, Response = Response>>,
+    cat: &str,
+) -> Option<u64> {
     match cat {
         "control" => Some(mw.control_per_min),
         "config" => Some(mw.config_per_min),
@@ -136,27 +151,51 @@ fn parse_first_ip_from_xff(header: &str) -> Option<IpAddr> {
 
 pub(crate) fn extract_ip(headers: &HeaderMap, req: &Request) -> Option<IpAddr> {
     if let Some(v) = headers.get("x-forwarded-for").and_then(|h| h.to_str().ok()) {
-        if let Some(ip) = parse_first_ip_from_xff(v) { return Some(ip); }
+        if let Some(ip) = parse_first_ip_from_xff(v) {
+            return Some(ip);
+        }
     }
     if let Some(v) = headers.get("x-real-ip").and_then(|h| h.to_str().ok()) {
-        if let Ok(ip) = v.parse() { return Some(ip); }
+        if let Ok(ip) = v.parse() {
+            return Some(ip);
+        }
     }
     // Fallback to connection info if available
-    if let Some(addr) = req.extensions().get::<std::net::SocketAddr>() { return Some(addr.ip()); }
+    if let Some(addr) = req.extensions().get::<std::net::SocketAddr>() {
+        return Some(addr.ip());
+    }
     None
 }
 
-fn set_headers(mut resp: Response, limit: Option<u64>, remaining: Option<u64>, reset_ts: u64, retry_after: Option<u64>) -> Response {
+fn set_headers(
+    mut resp: Response,
+    limit: Option<u64>,
+    remaining: Option<u64>,
+    reset_ts: u64,
+    retry_after: Option<u64>,
+) -> Response {
     let headers = resp.headers_mut();
     if let Some(l) = limit {
-        headers.insert("X-RateLimit-Limit", HeaderValue::from_str(&l.to_string()).unwrap());
+        headers.insert(
+            "X-RateLimit-Limit",
+            HeaderValue::from_str(&l.to_string()).unwrap(),
+        );
     } else {
         headers.insert("X-RateLimit-Limit", HeaderValue::from_static("0"));
     }
-    headers.insert("X-RateLimit-Remaining", HeaderValue::from_str(&remaining.unwrap_or(0).to_string()).unwrap());
-    headers.insert("X-RateLimit-Reset", HeaderValue::from_str(&reset_ts.to_string()).unwrap());
+    headers.insert(
+        "X-RateLimit-Remaining",
+        HeaderValue::from_str(&remaining.unwrap_or(0).to_string()).unwrap(),
+    );
+    headers.insert(
+        "X-RateLimit-Reset",
+        HeaderValue::from_str(&reset_ts.to_string()).unwrap(),
+    );
     if let Some(secs) = retry_after {
-        headers.insert("Retry-After", HeaderValue::from_str(&secs.to_string()).unwrap());
+        headers.insert(
+            "Retry-After",
+            HeaderValue::from_str(&secs.to_string()).unwrap(),
+        );
     }
     resp
 }
@@ -168,7 +207,9 @@ where
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+    type Future = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+    >;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
@@ -183,7 +224,10 @@ where
         // For public endpoints do nothing but set headers with no limit
         if endpoint == "public" {
             let fut = self.inner.call(req);
-            let reset_ts = (std::time::SystemTime::now() + self.window).duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+            let reset_ts = (std::time::SystemTime::now() + self.window)
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
             return Box::pin(async move {
                 let resp = fut.await?;
                 let resp = set_headers(resp, None, None, reset_ts, None);
@@ -194,7 +238,10 @@ where
         let limit = limit_for_category(self, endpoint).unwrap_or(0);
         let now = Instant::now();
         let reset_at = now + self.window;
-        let reset_ts = (std::time::SystemTime::now() + self.window).duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let reset_ts = (std::time::SystemTime::now() + self.window)
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         let remaining: u64;
         let mut over_limit = false;
@@ -204,7 +251,10 @@ where
             let shard_idx = shard_index(&ip, endpoint);
             let shard = &self.shards[shard_idx];
             let mut map = shard.map.lock().expect("rate limit lock");
-            let entry = map.entry((ip, endpoint)).or_insert(Bucket { last_refill: now, tokens: limit as f64 });
+            let entry = map.entry((ip, endpoint)).or_insert(Bucket {
+                last_refill: now,
+                tokens: limit as f64,
+            });
             let elapsed = now.duration_since(entry.last_refill).as_secs_f64();
             entry.tokens = (entry.tokens + elapsed * refill_per_sec).min(limit as f64);
             entry.last_refill = now;
@@ -229,19 +279,27 @@ where
                 .body(axum::body::Body::from("Too Many Requests"))
                 .unwrap();
             let retry_after = reset_at.duration_since(now).as_secs();
-            resp = set_headers(resp, Some(limit), Some(remaining), reset_ts, Some(retry_after));
-        // Periodic cleanup of inactive buckets
-        {
-            let mut last = self.last_cleanup.lock().unwrap();
-            if last.elapsed() > Duration::from_secs(60) {
-                *last = Instant::now();
-                for shard in self.shards.iter() {
-                    let mut map = shard.map.lock().unwrap();
-                    let nowi = Instant::now();
-                    map.retain(|_, b| nowi.duration_since(b.last_refill) < Duration::from_secs(600));
+            resp = set_headers(
+                resp,
+                Some(limit),
+                Some(remaining),
+                reset_ts,
+                Some(retry_after),
+            );
+            // Periodic cleanup of inactive buckets
+            {
+                let mut last = self.last_cleanup.lock().unwrap();
+                if last.elapsed() > Duration::from_secs(60) {
+                    *last = Instant::now();
+                    for shard in self.shards.iter() {
+                        let mut map = shard.map.lock().unwrap();
+                        let nowi = Instant::now();
+                        map.retain(|_, b| {
+                            nowi.duration_since(b.last_refill) < Duration::from_secs(600)
+                        });
+                    }
                 }
             }
-        }
 
             return Box::pin(async move { Ok(resp) });
         }
@@ -254,4 +312,3 @@ where
         })
     }
 }
-

@@ -1,5 +1,5 @@
-use axum::http::{Request, StatusCode};
 use axum::body::Body;
+use axum::http::{Request, StatusCode};
 use tower::ServiceExt;
 
 #[tokio::test]
@@ -9,7 +9,9 @@ async fn rate_limit_exceeded_returns_429() {
 
     // Service: always returns 200 OK with body "ok"
     let base = service_fn(|_req: Request<Body>| async move {
-        Ok::<axum::response::Response<Body>, Infallible>(axum::response::Response::new(Body::from("ok")))
+        Ok::<axum::response::Response<Body>, Infallible>(axum::response::Response::new(Body::from(
+            "ok",
+        )))
     });
 
     // Custom limits: status <= 5/min for test
@@ -53,7 +55,9 @@ async fn different_ips_have_separate_budgets() {
     use tower::{service_fn, ServiceBuilder};
 
     let base = service_fn(|_req: Request<Body>| async move {
-        Ok::<axum::response::Response<Body>, Infallible>(axum::response::Response::new(Body::from("ok")))
+        Ok::<axum::response::Response<Body>, Infallible>(axum::response::Response::new(Body::from(
+            "ok",
+        )))
     });
 
     let cfg = solana_arbitrage_bot::web::RateLimitsConfig {
@@ -68,8 +72,18 @@ async fn different_ips_have_separate_budgets() {
         .service(base);
 
     for _ in 0..5 {
-        let req1 = Request::builder().method("GET").uri("/api/status").header("x-real-ip", "1.1.1.1").body(Body::empty()).unwrap();
-        let req2 = Request::builder().method("GET").uri("/api/status").header("x-real-ip", "2.2.2.2").body(Body::empty()).unwrap();
+        let req1 = Request::builder()
+            .method("GET")
+            .uri("/api/status")
+            .header("x-real-ip", "1.1.1.1")
+            .body(Body::empty())
+            .unwrap();
+        let req2 = Request::builder()
+            .method("GET")
+            .uri("/api/status")
+            .header("x-real-ip", "2.2.2.2")
+            .body(Body::empty())
+            .unwrap();
         let r1 = svc.clone().oneshot(req1).await.unwrap();
         let r2 = svc.clone().oneshot(req2).await.unwrap();
         assert_eq!(r1.status(), StatusCode::OK);
@@ -77,9 +91,17 @@ async fn different_ips_have_separate_budgets() {
     }
 
     // Next request from 1.1.1.1 should be 429, 2.2.2.2 still OK if not exceeded
-    let r1 = svc.clone().oneshot(
-        Request::builder().method("GET").uri("/api/status").header("x-real-ip", "1.1.1.1").body(Body::empty()).unwrap()
-    ).await.unwrap();
+    let r1 = svc
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/status")
+                .header("x-real-ip", "1.1.1.1")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
     assert_eq!(r1.status(), StatusCode::TOO_MANY_REQUESTS);
 }
-

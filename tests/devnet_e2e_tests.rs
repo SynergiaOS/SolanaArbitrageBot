@@ -1,5 +1,8 @@
 use rust_decimal::Decimal;
-use solana_arbitrage_bot::{calculator::ArbitrageOpportunity, executor::TransactionExecutor, Config, DexConfig, DexInfo, ExecutionConfig, LimitsConfig, RpcConfig, WalletConfig};
+use solana_arbitrage_bot::{
+    calculator::ArbitrageOpportunity, executor::TransactionExecutor, Config, DexConfig, DexInfo,
+    ExecutionConfig, LimitsConfig, RpcConfig, WalletConfig,
+};
 
 // NOTE: This test uses devnet endpoints and runs in DRY-RUN mode. It fetches a real Jupiter quote
 // and performs a simulation without sending a live transaction.
@@ -17,8 +20,14 @@ fn config_devnet() -> Config {
             ledger_path: None,
         },
         dex: DexConfig {
-            raydium: DexInfo { program_id: "".into(), sol_usdc_pool: "".into() },
-            orca: DexInfo { program_id: "".into(), sol_usdc_pool: "".into() },
+            raydium: DexInfo {
+                program_id: "".into(),
+                sol_usdc_pool: "".into(),
+            },
+            orca: DexInfo {
+                program_id: "".into(),
+                sol_usdc_pool: "".into(),
+            },
         },
         limits: LimitsConfig {
             max_position_sol: Decimal::from_f64_retain(0.01).unwrap(),
@@ -65,4 +74,3 @@ async fn devnet_jupiter_simulation_dry_run() {
     let res = exec.execute_direct_swap(&opp).await;
     assert!(res.is_ok());
 }
-

@@ -242,7 +242,11 @@ impl TradeExecutor {
             .await?;
 
         let sig_str = signature.to_string();
-        info!("✅ Transaction confirmed: {}...{}", &sig_str[..8], &sig_str[sig_str.len()-8..]);
+        info!(
+            "✅ Transaction confirmed: {}...{}",
+            &sig_str[..8],
+            &sig_str[sig_str.len() - 8..]
+        );
 
         Ok(signature.to_string())
     }

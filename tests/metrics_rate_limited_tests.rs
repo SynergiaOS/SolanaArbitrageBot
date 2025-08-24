@@ -1,6 +1,6 @@
-use axum::http::{Request, StatusCode};
 use axum::body::Body;
-use tower::{ServiceExt, ServiceBuilder, service_fn};
+use axum::http::{Request, StatusCode};
+use tower::{service_fn, ServiceBuilder, ServiceExt};
 
 #[tokio::test]
 async fn metrics_rate_limited_counter_increments() {
@@ -14,7 +14,7 @@ async fn metrics_rate_limited_counter_increments() {
     // Build a tower Service chain to ensure shared state across requests
     let base = service_fn(|_req: Request<Body>| async move {
         Ok::<axum::response::Response<Body>, std::convert::Infallible>(
-            axum::response::Response::new(Body::from("ok"))
+            axum::response::Response::new(Body::from("ok")),
         )
     });
 
@@ -23,16 +23,21 @@ async fn metrics_rate_limited_counter_increments() {
         .layer(solana_arbitrage_bot::web::rate_limit::RateLimitLayer::from_config(&Some(limits)))
         .service(base);
 
-    let req = Request::builder().method("GET").uri("/api/status")
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/status")
         .header("x-real-ip", "192.0.2.3")
-        .body(Body::empty()).unwrap();
+        .body(Body::empty())
+        .unwrap();
     let _ = svc.clone().oneshot(req).await.unwrap();
 
     // second request should be 429
-    let req = Request::builder().method("GET").uri("/api/status")
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/status")
         .header("x-real-ip", "192.0.2.3")
-        .body(Body::empty()).unwrap();
+        .body(Body::empty())
+        .unwrap();
     let resp = svc.clone().oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
 }
-

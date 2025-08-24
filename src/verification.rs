@@ -217,7 +217,6 @@ pub enum ArbitrageVerification {
 mod tests {
     use super::*;
 
-
     #[tokio::test]
     async fn test_verification_config_default() {
         let config = VerificationConfig::default();

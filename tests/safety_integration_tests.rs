@@ -1,7 +1,6 @@
 //! Comprehensive Safety Integration Tests
 //! Tests all safety features including pre-trade checks, post-trade monitoring, and emergency procedures
 
-
 use solana_arbitrage_bot::sniper::{
     safety::{EnhancedTokenData, RealTimeMetrics},
     RugMonitor, RugMonitorConfig, SafetyChecker, SafetyConfig, SafetyResult,
@@ -101,8 +100,14 @@ mod safety_tests {
         let checker = SafetyChecker::from_config(&config, rpc_client);
 
         // Test that checker is properly initialized
-        assert_eq!(checker.get_config().min_liquidity_sol, config.min_liquidity_sol);
-        assert_eq!(checker.get_config().max_market_cap_usd, config.max_market_cap_usd);
+        assert_eq!(
+            checker.get_config().min_liquidity_sol,
+            config.min_liquidity_sol
+        );
+        assert_eq!(
+            checker.get_config().max_market_cap_usd,
+            config.max_market_cap_usd
+        );
         assert_eq!(
             checker.get_config().enable_safety_checks,
             config.enable_safety_checks
@@ -172,7 +177,10 @@ mod safety_tests {
         let monitor = RugMonitor::with_config(config.clone(), rpc_client);
 
         // Test that monitor is properly initialized
-        assert_eq!(monitor.get_config().enable_monitoring, config.enable_monitoring);
+        assert_eq!(
+            monitor.get_config().enable_monitoring,
+            config.enable_monitoring
+        );
         assert_eq!(
             monitor.get_config().liquidity_drop_threshold,
             config.liquidity_drop_threshold
@@ -218,7 +226,7 @@ mod safety_tests {
         match safe_result {
             SafetyResult::Safe => {
                 // Test passed - expected Safe result
-            },
+            }
             SafetyResult::Unsafe(_) => {
                 panic!("Safe result should not match Unsafe variant")
             }

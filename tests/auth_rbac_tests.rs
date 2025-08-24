@@ -1,6 +1,6 @@
+use axum::http::{Request, StatusCode};
 use axum::{routing::get, Router};
 use tower::ServiceExt;
-use axum::http::{Request, StatusCode};
 
 #[tokio::test]
 async fn control_requires_admin_key_and_allowlisted_ip() {
@@ -25,17 +25,23 @@ async fn control_requires_admin_key_and_allowlisted_ip() {
         .layer(solana_arbitrage_bot::web::auth::auth_middleware_from_config(&cfg));
 
     // Wrong IP (no X-Real-IP) -> forbidden
-    let req = Request::builder().method("GET").uri("/api/control/stop")
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/control/stop")
         .header("x-api-key", "admin123")
-        .body(axum::body::Body::empty()).unwrap();
+        .body(axum::body::Body::empty())
+        .unwrap();
     let resp = app.clone().oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
 
     // Allowlisted IP + admin key -> OK
-    let req = Request::builder().method("GET").uri("/api/control/stop")
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/control/stop")
         .header("x-api-key", "admin123")
         .header("x-real-ip", "127.0.0.1")
-        .body(axum::body::Body::empty()).unwrap();
+        .body(axum::body::Body::empty())
+        .unwrap();
     let resp = app.clone().oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 }
@@ -48,8 +54,11 @@ async fn config_requires_config_or_default_token() {
         .layer(solana_arbitrage_bot::web::auth::auth_middleware_from_config(&cfg));
 
     // No token/key -> unauthorized
-    let req = Request::builder().method("GET").uri("/api/config").body(axum::body::Body::empty()).unwrap();
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/config")
+        .body(axum::body::Body::empty())
+        .unwrap();
     let resp = app.clone().oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }
-

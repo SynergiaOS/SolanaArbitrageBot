@@ -1,6 +1,6 @@
+use axum::http::Request;
 use axum::{routing::get, Router};
 use tower::ServiceExt;
-use axum::http::Request;
 
 #[tokio::test]
 async fn limiter_concurrency_stress() {
@@ -20,13 +20,17 @@ async fn limiter_concurrency_stress() {
     for _ in 0..30 {
         let appc = app.clone();
         handles.push(tokio::spawn(async move {
-            let req = Request::builder().method("GET").uri("/api/status")
+            let req = Request::builder()
+                .method("GET")
+                .uri("/api/status")
                 .header("x-real-ip", "192.0.2.1")
-                .body(axum::body::Body::empty()).unwrap();
+                .body(axum::body::Body::empty())
+                .unwrap();
             let _ = appc.oneshot(req).await.unwrap();
         }));
     }
 
-    for h in handles { let _ = h.await; }
+    for h in handles {
+        let _ = h.await;
+    }
 }
-

@@ -198,11 +198,15 @@ impl DiscordAlert {
 
         // Remove potential private keys (64 hex chars)
         let private_key_regex = regex::Regex::new(r"[0-9a-fA-F]{64}").unwrap();
-        sanitized = private_key_regex.replace_all(&sanitized, "***PRIVATE_KEY***").to_string();
+        sanitized = private_key_regex
+            .replace_all(&sanitized, "***PRIVATE_KEY***")
+            .to_string();
 
         // Remove potential API keys (common patterns)
         let api_key_regex = regex::Regex::new(r"[A-Za-z0-9]{32,}").unwrap();
-        sanitized = api_key_regex.replace_all(&sanitized, "***API_KEY***").to_string();
+        sanitized = api_key_regex
+            .replace_all(&sanitized, "***API_KEY***")
+            .to_string();
 
         // Truncate very long error messages
         if sanitized.len() > 500 {

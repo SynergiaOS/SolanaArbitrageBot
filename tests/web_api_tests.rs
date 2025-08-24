@@ -207,8 +207,8 @@ async fn emergency_empty_body_returns_200_and_stops_bot() {
 #[tokio::test]
 async fn rate_limit_real_router_6th_is_429() {
     use axum::http::Method;
-    use tower::ServiceBuilder;
     use solana_arbitrage_bot::web::rate_limit::RateLimitLayer;
+    use tower::ServiceBuilder;
 
     let cfg = sample_config();
     let app_state = build_app_state(&cfg).await;
@@ -228,22 +228,36 @@ async fn rate_limit_real_router_6th_is_429() {
     let app = Router::new()
         .route("/api/status", get(web::handlers::get_bot_status))
         .with_state(app_state)
-        .layer(ServiceBuilder::new().layer(RateLimitLayer::from_config(&Some(limits))).layer(cors));
+        .layer(
+            ServiceBuilder::new()
+                .layer(RateLimitLayer::from_config(&Some(limits)))
+                .layer(cors),
+        );
 
     for i in 0..5 {
-        let req = Request::builder().method("GET").uri("/api/status").header("x-real-ip","127.0.0.1").body(axum::body::Body::empty()).unwrap();
+        let req = Request::builder()
+            .method("GET")
+            .uri("/api/status")
+            .header("x-real-ip", "127.0.0.1")
+            .body(axum::body::Body::empty())
+            .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK, "req {}", i);
     }
-    let req = Request::builder().method("GET").uri("/api/status").header("x-real-ip","127.0.0.1").body(axum::body::Body::empty()).unwrap();
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/status")
+        .header("x-real-ip", "127.0.0.1")
+        .body(axum::body::Body::empty())
+        .unwrap();
     let resp = app.clone().oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
 }
 
 #[tokio::test]
 async fn ratelimit_headers_are_present() {
-    use tower::ServiceBuilder;
     use solana_arbitrage_bot::web::rate_limit::RateLimitLayer;
+    use tower::ServiceBuilder;
 
     let cfg = sample_config();
     let app_state = build_app_state(&cfg).await;
@@ -253,14 +267,18 @@ async fn ratelimit_headers_are_present() {
         .with_state(app_state)
         .layer(ServiceBuilder::new().layer(RateLimitLayer::from_config(&None)));
 
-    let req = Request::builder().method("GET").uri("/api/status").header("x-real-ip","3.3.3.3").body(axum::body::Body::empty()).unwrap();
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/status")
+        .header("x-real-ip", "3.3.3.3")
+        .body(axum::body::Body::empty())
+        .unwrap();
     let resp = app.clone().oneshot(req).await.unwrap();
     let h = resp.headers();
     assert!(h.get("x-ratelimit-limit").is_some());
     assert!(h.get("x-ratelimit-remaining").is_some());
     assert!(h.get("x-ratelimit-reset").is_some());
 }
-
 
 #[allow(dead_code)]
 async fn emergency_json_body_returns_200_and_logs() {

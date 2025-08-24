@@ -107,7 +107,11 @@ fn generate_realistic_historical_data(days: usize) -> Vec<HistoricalPriceData> {
                 let random3 = (rng_state as f64) / (u64::MAX as f64);
 
                 // Market volatility patterns
-                let volatility = if (13..=21).contains(&hour) { 0.02 } else { 0.01 }; // Higher volatility during US hours
+                let volatility = if (13..=21).contains(&hour) {
+                    0.02
+                } else {
+                    0.01
+                }; // Higher volatility during US hours
 
                 // Price movements (mean reversion with trend)
                 let trend = (day as f64 * 0.1).sin() * 0.001; // Long-term trend
