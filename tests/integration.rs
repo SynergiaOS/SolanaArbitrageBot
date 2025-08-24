@@ -45,6 +45,7 @@ async fn test_real_raydium_price_fetch() -> Result<()> {
         },
         execution: ExecutionConfig {
             priority_fee_lamports: 10000,
+            max_priority_fee_cap_lamports: Some(50_000),
             simulation_required: true,
             max_retries: 3,
         },
@@ -241,6 +242,7 @@ fn test_config() -> Config {
         },
         execution: ExecutionConfig {
             priority_fee_lamports: 10000,
+            max_priority_fee_cap_lamports: Some(50_000),
             simulation_required: true,
             max_retries: 3,
         },

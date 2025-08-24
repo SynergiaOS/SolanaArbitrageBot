@@ -66,12 +66,15 @@ sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono"
 # Web Server
 axum = { version = "0.7", features = ["ws"] }
 tower = { version = "0.4", features = ["full"] }
-tower-http = { version = "0.5", features = ["cors", "auth", "fs"] }
+tower-http = { version = "0.5", features = ["cors", "auth", "fs", "timeout", "set-header", "limit"] }
 
 # Config
 config = "0.14"
 clap = { version = "4.5", features = ["derive"] }
 csv = "1.3.1"
+prometheus = "0.14.0"
+lazy_static = "1.5.0"
+cidr = "0.3.1"
 
 [[bin]]
 name = "demo-discord"
@@ -85,9 +88,10 @@ path = "src/bin/sniper.rs"
 name = "historical_backtest"
 path = "src/bin/historical_backtest.rs"
 
-[[bin]]
-name = "enhanced_arbitrage_bot"
-path = "src/bin/enhanced_arbitrage_bot.rs"
+# Disabled - missing required modules
+# [[bin]]
+# name = "enhanced_arbitrage_bot"
+# path = "src/bin/enhanced_arbitrage_bot.rs"
 
 [profile.release]
 opt-level = 3

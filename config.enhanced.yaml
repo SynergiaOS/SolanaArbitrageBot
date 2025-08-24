@@ -8,8 +8,8 @@ core:
     ws_url: "wss://api.mainnet-beta.solana.com"
   
   wallet:
-    path: "./wallet.json"
-    use_ledger: false
+    use_ledger: true
+    path: "./wallet.json" # BACKUP ONLY - avoid in prod
     ledger_path: "44'/501'/0'/0'"
   
   dex:
@@ -34,8 +34,8 @@ core:
     max_retries: 3
   
   discord:
-    webhook_url: "YOUR_DISCORD_WEBHOOK_URL"
-    enabled: true
+    webhook_url: "${DISCORD_WEBHOOK_URL}"
+    enabled: ${DISCORD_ENABLED:true}
     alert_on_profit: true
     alert_on_error: true
     alert_on_startup: true

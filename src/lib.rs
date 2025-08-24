@@ -87,17 +87,30 @@ pub struct LimitsConfig {
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct ExecutionConfig {
     pub priority_fee_lamports: u64,
+    pub max_priority_fee_cap_lamports: Option<u64>,
     pub simulation_required: bool,
     pub max_retries: u32,
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Clone, serde::Deserialize)]
 pub struct DiscordConfig {
     pub webhook_url: String,
     pub enabled: bool,
     pub alert_on_profit: Option<bool>,
     pub alert_on_error: Option<bool>,
     pub alert_on_startup: Option<bool>,
+}
+
+impl std::fmt::Debug for DiscordConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DiscordConfig")
+            .field("webhook_url", &"***MASKED***")
+            .field("enabled", &self.enabled)
+            .field("alert_on_profit", &self.alert_on_profit)
+            .field("alert_on_error", &self.alert_on_error)
+            .field("alert_on_startup", &self.alert_on_startup)
+            .finish()
+    }
 }
 
 use rust_decimal::Decimal;

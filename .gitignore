@@ -37,11 +37,17 @@ bot.log
 *.sqlite3
 
 # Config (sensitive)
+# Broad patterns to ensure all wallet key files are ignored
 wallet.json
 wallet_converted.json
 wall_k.txt
 temp_wallet.json
 private_key.json
+# Also ignore any JSON file that looks like a wallet backup/conversion
+*wallet*.json
+wallet_*.json
+wallet_backup_*.json
+
 .env
 .env.local
 

@@ -29,6 +29,7 @@ pub enum SellAction {
 
 pub struct PositionManager {
     positions: Arc<Mutex<HashMap<Pubkey, Position>>>,
+    #[allow(dead_code)]
     config: SniperConfig,
 }
 

@@ -6,8 +6,8 @@ rpc:
   ws_url: "wss://api.mainnet-beta.solana.com"
 
 wallet:
-  use_ledger: false
-  path: "./wallet.json"
+  use_ledger: true
+  path: "./wallet.json" # BACKUP ONLY - DO NOT USE IN PROD
 
 
 # Web dashboard

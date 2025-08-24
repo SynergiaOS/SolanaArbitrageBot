@@ -3,7 +3,7 @@
 
 use crate::sniper::{NewToken, Position};
 use anyhow::{anyhow, Result};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use log::{debug, error, info, warn};
 use reqwest::Client;
 use serde_json;
@@ -11,7 +11,7 @@ use solana_account_decoder::UiAccountEncoding;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_config::RpcAccountInfoConfig;
 use solana_program_pack::Pack;
-use solana_sdk::commitment_config::CommitmentConfig;
+
 use solana_sdk::pubkey::Pubkey;
 use spl_token::state::Mint;
 use std::collections::HashMap;
@@ -386,5 +386,10 @@ impl RugMonitor {
         stats.insert("total_alerts_today".to_string(), 0); // Would track this in real implementation
 
         stats
+    }
+
+    /// Get rug monitor configuration (read-only access)
+    pub fn get_config(&self) -> &RugMonitorConfig {
+        &self.config
     }
 }

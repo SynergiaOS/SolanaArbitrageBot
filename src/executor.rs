@@ -27,7 +27,9 @@ const SOL_MINT: &str = "So11111111111111111111111111111111111111112";
 const USDC_MINT: &str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
 // DEX Program IDs
+#[allow(dead_code)]
 const RAYDIUM_V4: &str = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
+#[allow(dead_code)]
 const ORCA_WHIRLPOOL: &str = "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc";
 
 pub enum WalletType {
@@ -95,7 +97,9 @@ struct SwapInfo {
 #[derive(Debug, Deserialize)]
 struct JupiterSwapResponse {
     swap_transaction: String,
+    #[allow(dead_code)]
     last_valid_block_height: u64,
+    #[allow(dead_code)]
     prioritization_fee: Option<u64>,
 }
 
@@ -104,6 +108,7 @@ pub struct TransactionExecutor {
     wallet: WalletType,
     dry_run: bool,
     priority_fee: u64,
+    max_priority_fee: u64,
     simulation_required: bool,
     slippage_bps: u16,
     http_client: reqwest::Client,
@@ -124,9 +129,18 @@ impl TransactionExecutor {
 
     pub fn new(config: &crate::Config, dry_run: bool) -> Result<Self> {
         // Load wallet
-        let wallet = if config.wallet.use_ledger.unwrap_or(false) {
-            warn!("Ledger support not fully implemented yet - using keypair");
-            Self::setup_keypair_wallet(&config.wallet.path)?
+        // Load wallet: in dry-run and tests, allow missing wallet.json by using a dummy keypair
+        let wallet = if dry_run {
+            match Self::setup_keypair_wallet(&config.wallet.path) {
+                Ok(kp) => kp,
+                Err(_) => {
+                    warn!("No wallet file found; using ephemeral test keypair in dry-run mode");
+                    Self::setup_ephemeral_keypair()?
+                }
+            }
+        } else if config.wallet.use_ledger.unwrap_or(false) {
+            // For now, ledger signing is not implemented; refuse live mode with ledger
+            return Err(anyhow!("Ledger not yet fully implemented — use dry-run or keypair for testing"));
         } else {
             Self::setup_keypair_wallet(&config.wallet.path)?
         };
@@ -151,18 +165,34 @@ impl TransactionExecutor {
             if dry_run { "DRY RUN" } else { "LIVE TRADING" }
         );
 
-        // Create optimized HTTP client
+        // Create secure HTTP client
         let http_client = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
             .pool_idle_timeout(Duration::from_secs(30))
             .pool_max_idle_per_host(10)
+            .danger_accept_invalid_certs(false) // Always verify TLS certificates
+            .https_only(true) // Only allow HTTPS connections
             .build()?;
+
+        let cap = config
+            .execution
+            .max_priority_fee_cap_lamports
+            .unwrap_or(50_000);
+        let requested = config.execution.priority_fee_lamports;
+        if requested > cap {
+            return Err(anyhow!(
+                "Priority fee {} exceeds cap {} (lamports)",
+                requested,
+                cap
+            ));
+        }
 
         Ok(Self {
             rpc_client,
             wallet,
             dry_run,
-            priority_fee: config.execution.priority_fee_lamports,
+            priority_fee: requested,
+            max_priority_fee: cap,
             simulation_required: config.execution.simulation_required,
             slippage_bps: (decimal_to_f64(config.limits.max_slippage_percent) * 100.0) as u16,
             http_client,
@@ -201,32 +231,51 @@ impl TransactionExecutor {
 
     fn setup_keypair_wallet(path: &str) -> Result<WalletType> {
         // Try reading as JSON array first
-        let wallet_str = std::fs::read_to_string(path)
+        let mut wallet_str = std::fs::read_to_string(path)
             .map_err(|e| anyhow!("Failed to read wallet from {}: {}", path, e))?;
 
         // Try parsing as JSON array
-        let wallet_bytes: Vec<u8> = if let Ok(bytes) = serde_json::from_str::<Vec<u8>>(&wallet_str)
-        {
-            bytes
-        } else if let Ok(bytes) = serde_json::from_str::<Vec<i8>>(&wallet_str) {
-            // Handle signed bytes (convert i8 to u8)
-            bytes.into_iter().map(|b| b as u8).collect()
-        } else {
-            // Try base58 or other formats
-            return Err(anyhow!("Invalid wallet format in {}", path));
-        };
+        let mut wallet_bytes: Vec<u8> =
+            if let Ok(bytes) = serde_json::from_str::<Vec<u8>>(&wallet_str) {
+                bytes
+            } else if let Ok(bytes) = serde_json::from_str::<Vec<i8>>(&wallet_str) {
+                // Handle signed bytes (convert i8 to u8)
+                bytes.into_iter().map(|b| b as u8).collect()
+            } else {
+                // Try base58 or other formats
+                return Err(anyhow!("Invalid wallet format in {}", path));
+            };
+
+        // Clear sensitive data from memory
+        wallet_str.clear();
 
         if wallet_bytes.len() != 64 {
+            // Clear sensitive data before returning error
+            wallet_bytes.fill(0);
             return Err(anyhow!(
                 "Invalid wallet size: expected 64 bytes, got {}",
                 wallet_bytes.len()
             ));
         }
 
-        let wallet = Keypair::try_from(&wallet_bytes[..])
-            .map_err(|e| anyhow!("Invalid wallet format: {}", e))?;
+        let wallet = Keypair::try_from(&wallet_bytes[..]).map_err(|e| {
+            // Clear sensitive data before returning error
+            wallet_bytes.fill(0);
+            anyhow!("Invalid wallet format: {}", e)
+        })?;
+
+        // Clear sensitive data from memory
+        wallet_bytes.fill(0);
 
         Ok(WalletType::Keypair(wallet))
+    }
+
+
+    // Create an ephemeral test keypair (in-memory) for dry-run/tests
+    fn setup_ephemeral_keypair() -> Result<WalletType> {
+        use solana_sdk::signature::Keypair;
+        let kp = Keypair::new();
+        Ok(WalletType::Keypair(kp))
     }
 
     pub async fn execute_arbitrage(&self, opportunity: &ArbitrageOpportunity) -> Result<Signature> {
@@ -446,6 +495,7 @@ impl TransactionExecutor {
         Ok(quote)
     }
 
+    #[allow(dead_code)]
     async fn build_jupiter_swap_transaction(
         &self,
         quote: JupiterQuoteResponse,
@@ -622,7 +672,7 @@ impl TransactionExecutor {
     // Fallback method: Build custom swap instructions (without Jupiter)
     pub async fn execute_direct_swap(
         &self,
-        opportunity: &ArbitrageOpportunity,
+        _opportunity: &ArbitrageOpportunity,
     ) -> Result<Signature> {
         info!("🔄 Executing direct DEX swap (fallback method)");
 
@@ -632,15 +682,14 @@ impl TransactionExecutor {
         };
 
         // Build instructions
-        let mut instructions = vec![];
-
-        // Add compute budget instruction
-        instructions.push(ComputeBudgetInstruction::set_compute_unit_price(
-            self.priority_fee,
-        ));
-
-        // Add compute unit limit
-        instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(300_000));
+        let instructions = vec![
+            // Enforce runtime cap for compute unit price
+            ComputeBudgetInstruction::set_compute_unit_price(
+                self.priority_fee.min(self.max_priority_fee),
+            ),
+            // Add compute unit limit
+            ComputeBudgetInstruction::set_compute_unit_limit(300_000),
+        ];
 
         // Note: Real swap instructions would go here
         // This requires integration with Raydium/Orca SDKs

@@ -127,6 +127,7 @@ impl LedgerConnection {
         info!("This will require approval on your Ledger device");
 
         // Create a simple test message
+        #[allow(deprecated)]
         use solana_sdk::system_instruction;
 
         let test_instruction = system_instruction::transfer(
@@ -141,7 +142,11 @@ impl LedgerConnection {
         match self.sign_message(&message) {
             Ok(signature) => {
                 info!("✅ Signing test successful");
-                info!("Test signature: {}", signature);
+                info!(
+                    "Test signature: {}...{}",
+                    &signature.to_string()[..8],
+                    &signature.to_string()[signature.to_string().len() - 8..]
+                );
                 Ok(())
             }
             Err(e) => {
@@ -154,14 +159,18 @@ impl LedgerConnection {
 
     /// Get wallet information for debugging
     pub fn get_wallet_info(&self) -> String {
+        let pubkey_str = self.pubkey.to_string();
         format!(
             "Ledger Connection Info:\n\
-            - Public Key: {}\n\
+            - Public Key: {}...{}\n\
             - Derivation Path: {:?}\n\
             - Wallet Type: Ledger Hardware Wallet\n\
             - Timeout: {:?}\n\
             - Status: Connected",
-            self.pubkey, self.derivation_path, self.timeout_duration
+            &pubkey_str[..8],
+            &pubkey_str[pubkey_str.len() - 8..],
+            self.derivation_path,
+            self.timeout_duration
         )
     }
 

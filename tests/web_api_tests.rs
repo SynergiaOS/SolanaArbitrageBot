@@ -16,6 +16,7 @@ use solana_arbitrage_bot::{
 };
 
 // Simple in-memory test logger to capture warn! lines
+#[allow(dead_code)]
 struct TestLogger {
     lines: Mutex<Vec<String>>,
 }
@@ -31,10 +32,12 @@ impl log::Log for TestLogger {
     }
     fn flush(&self) {}
 }
+#[allow(dead_code)]
 static TEST_LOGGER: OnceLock<&'static TestLogger> = OnceLock::new();
+#[allow(dead_code)]
 fn ensure_logger() -> &'static TestLogger {
     if let Some(l) = TEST_LOGGER.get() {
-        return *l;
+        return l;
     }
     let logger = Box::leak(Box::new(TestLogger {
         lines: Mutex::new(Vec::new()),
@@ -76,6 +79,7 @@ fn sample_config() -> Config {
         },
         execution: ExecutionConfig {
             priority_fee_lamports: 5000,
+            max_priority_fee_cap_lamports: Some(50_000),
             simulation_required: true,
             max_retries: 3,
         },
@@ -86,6 +90,10 @@ fn sample_config() -> Config {
             port: 3001,
             auth_token: None,
             database_path: "./data/test.db".into(),
+            allowed_origins: Some(vec!["http://localhost:3000".into()]),
+            rate_limits: None,
+            api_keys: None,
+            control_ip_allowlist: None,
         }),
     }
 }
@@ -197,6 +205,82 @@ async fn emergency_empty_body_returns_200_and_stops_bot() {
 }
 
 #[tokio::test]
+async fn rate_limit_real_router_6th_is_429() {
+    use axum::http::Method;
+    use solana_arbitrage_bot::web::rate_limit::RateLimitLayer;
+    use tower::ServiceBuilder;
+
+    let cfg = sample_config();
+    let app_state = build_app_state(&cfg).await;
+
+    let cors = tower_http::cors::CorsLayer::new()
+        .allow_origin(["http://localhost:3000".parse().unwrap()])
+        .allow_methods([Method::GET])
+        .allow_headers(["content-type".parse().unwrap()]);
+
+    let limits = solana_arbitrage_bot::web::RateLimitsConfig {
+        default_per_ip_per_minute: Some(1000),
+        control_per_ip_per_minute: Some(1000),
+        config_per_ip_per_minute: Some(1000),
+        status_per_ip_per_minute: Some(5),
+    };
+
+    let app = Router::new()
+        .route("/api/status", get(web::handlers::get_bot_status))
+        .with_state(app_state)
+        .layer(
+            ServiceBuilder::new()
+                .layer(RateLimitLayer::from_config(&Some(limits)))
+                .layer(cors),
+        );
+
+    for i in 0..5 {
+        let req = Request::builder()
+            .method("GET")
+            .uri("/api/status")
+            .header("x-real-ip", "127.0.0.1")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK, "req {}", i);
+    }
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/status")
+        .header("x-real-ip", "127.0.0.1")
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+}
+
+#[tokio::test]
+async fn ratelimit_headers_are_present() {
+    use solana_arbitrage_bot::web::rate_limit::RateLimitLayer;
+    use tower::ServiceBuilder;
+
+    let cfg = sample_config();
+    let app_state = build_app_state(&cfg).await;
+
+    let app = Router::new()
+        .route("/api/status", get(web::handlers::get_bot_status))
+        .with_state(app_state)
+        .layer(ServiceBuilder::new().layer(RateLimitLayer::from_config(&None)));
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/api/status")
+        .header("x-real-ip", "3.3.3.3")
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    let h = resp.headers();
+    assert!(h.get("x-ratelimit-limit").is_some());
+    assert!(h.get("x-ratelimit-remaining").is_some());
+    assert!(h.get("x-ratelimit-reset").is_some());
+}
+
+#[allow(dead_code)]
 async fn emergency_json_body_returns_200_and_logs() {
     let _ = ensure_logger();
     let cfg = sample_config();

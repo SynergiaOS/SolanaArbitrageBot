@@ -37,7 +37,7 @@ impl DiscordAlert {
                 "fields": [
                     {
                         "name": "💳 Wallet",
-                        "value": format!("`{}`", wallet_address),
+                        "value": format!("`{}...{}`", &wallet_address[..8], &wallet_address[wallet_address.len()-8..]),
                         "inline": true
                     },
                     {
@@ -163,6 +163,9 @@ impl DiscordAlert {
             return Ok(());
         }
 
+        // Sanitize error message to prevent sensitive data leaks
+        let sanitized_error = self.sanitize_error_message(error_msg);
+
         let message = json!({
             "embeds": [{
                 "title": "🚨 Bot Error",
@@ -170,7 +173,7 @@ impl DiscordAlert {
                 "fields": [
                     {
                         "name": "❌ Error",
-                        "value": format!("```{}```", error_msg),
+                        "value": format!("```{}```", sanitized_error),
                         "inline": false
                     },
                     {
@@ -187,6 +190,30 @@ impl DiscordAlert {
         });
 
         self.send_webhook(message).await
+    }
+
+    /// Sanitize error messages to prevent sensitive data leaks
+    fn sanitize_error_message(&self, error_msg: &str) -> String {
+        let mut sanitized = error_msg.to_string();
+
+        // Remove potential private keys (64 hex chars)
+        let private_key_regex = regex::Regex::new(r"[0-9a-fA-F]{64}").unwrap();
+        sanitized = private_key_regex
+            .replace_all(&sanitized, "***PRIVATE_KEY***")
+            .to_string();
+
+        // Remove potential API keys (common patterns)
+        let api_key_regex = regex::Regex::new(r"[A-Za-z0-9]{32,}").unwrap();
+        sanitized = api_key_regex
+            .replace_all(&sanitized, "***API_KEY***")
+            .to_string();
+
+        // Truncate very long error messages
+        if sanitized.len() > 500 {
+            sanitized = format!("{}... (truncated)", &sanitized[..500]);
+        }
+
+        sanitized
     }
 
     pub async fn send_price_update(&self, raydium_price: f64, orca_price: f64) -> Result<()> {

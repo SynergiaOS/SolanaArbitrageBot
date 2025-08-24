@@ -6,10 +6,10 @@ rpc:
   backup_url: "https://mainnet.helius-rpc.com"
 
 wallet:
-  path: "./wallet.json"                            # BACKUP - NIE UŻYWAĆ!
-  use_ledger: true                                 # SNIPER: UŻYWAJ LEDGER!
-  ledger_path: "44'/501'/0'/0'"                   # Derivation path
-  ledger_address: "9PdJZJh33TsMB6s3DuhSXYCSpUiM3oBqyuno2aLvYTk"  # AKTYWNY adres Ledger (0.18992 SOL)
+  use_ledger: true
+  path: "./wallet.json"                            # BACKUP ONLY - DO NOT USE IN PROD
+  ledger_path: "44'/501'/0'/0'"
+  ledger_address: "9PdJZJh33TsMB6s3DuhSXYCSpUiM3oBqyuno2aLvYTk"
 
 # Sniper-specific settings
 sniper:

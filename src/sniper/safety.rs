@@ -1,9 +1,10 @@
 //! Safety Checker - Protects against honeypots and scams
 
-use crate::sniper::{NewToken, SafetyConfig};
+use crate::sniper::NewToken;
 use anyhow::{anyhow, Result};
 use log::{debug, info, warn};
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use serde_json;
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -15,6 +16,86 @@ use spl_token::state::Mint;
 use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
+
+#[derive(Clone, Deserialize, Serialize)]
+pub struct SafetyConfig {
+    // Liquidity & Market Cap
+    pub min_liquidity_sol: f64,
+    pub max_market_cap_usd: f64,
+
+    // Taxes
+    pub max_buy_tax_percent: f64,
+    pub max_sell_tax_percent: f64,
+
+    // Token Age & Holders
+    pub max_token_age_minutes: u32,
+    pub min_holders: u32,
+    pub max_dev_percentage: f64,
+
+    // Blacklists
+    pub blacklist_mints: Vec<String>,
+    pub blacklisted_creators: Vec<String>,
+    pub blacklist_keywords: Vec<String>,
+
+    // API Configuration
+    pub honeypot_api: Option<String>,
+    pub rugcheck_api: Option<String>,
+    pub helius_api_key: Option<String>,
+
+    // Safety Settings
+    pub enable_safety_checks: bool,
+}
+
+impl std::fmt::Debug for SafetyConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SafetyConfig")
+            .field("min_liquidity_sol", &self.min_liquidity_sol)
+            .field("max_market_cap_usd", &self.max_market_cap_usd)
+            .field("max_buy_tax_percent", &self.max_buy_tax_percent)
+            .field("max_sell_tax_percent", &self.max_sell_tax_percent)
+            .field("max_token_age_minutes", &self.max_token_age_minutes)
+            .field("min_holders", &self.min_holders)
+            .field("max_dev_percentage", &self.max_dev_percentage)
+            .field("blacklist_mints", &self.blacklist_mints)
+            .field("blacklisted_creators", &self.blacklisted_creators)
+            .field("blacklist_keywords", &self.blacklist_keywords)
+            .field("honeypot_api", &self.honeypot_api)
+            .field("rugcheck_api", &self.rugcheck_api)
+            .field(
+                "helius_api_key",
+                &self.helius_api_key.as_ref().map(|_| "***MASKED***"),
+            )
+            .field("enable_safety_checks", &self.enable_safety_checks)
+            .finish()
+    }
+}
+
+impl Default for SafetyConfig {
+    fn default() -> Self {
+        Self {
+            min_liquidity_sol: 5.0,
+            max_market_cap_usd: 50_000.0,
+            max_buy_tax_percent: 10.0,
+            max_sell_tax_percent: 10.0,
+            max_token_age_minutes: 5,
+            min_holders: 20,
+            max_dev_percentage: 20.0,
+            blacklist_mints: vec![],
+            blacklisted_creators: vec![],
+            blacklist_keywords: vec![
+                "test".to_string(),
+                "fake".to_string(),
+                "scam".to_string(),
+                "rug".to_string(),
+                "honeypot".to_string(),
+            ],
+            honeypot_api: Some("https://api.honeypot.is/v2/IsHoneypot".to_string()),
+            rugcheck_api: Some("https://api.rugcheck.xyz/v1/tokens".to_string()),
+            helius_api_key: None,
+            enable_safety_checks: true,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum SafetyResult {
@@ -53,9 +134,17 @@ impl SafetyChecker {
             .map(|k| k.to_lowercase())
             .collect();
 
+        // Create secure HTTP client
+        let http_client = Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .danger_accept_invalid_certs(false) // Always verify TLS certificates
+            .https_only(true) // Only allow HTTPS connections
+            .build()
+            .expect("Failed to create secure HTTP client");
+
         Self {
             config: config.clone(),
-            http_client: Client::new(),
+            http_client,
             rpc_client,
             blacklisted_creators,
             blacklisted_keywords,
@@ -518,7 +607,7 @@ impl SafetyChecker {
             .get_account_with_commitment(mint, CommitmentConfig::confirmed())
             .await?;
 
-        if let Some(account) = account_info.value {
+        if let Some(_account) = account_info.value {
             // Get current slot
             let current_slot = self.rpc_client.get_slot().await?;
 
@@ -587,8 +676,7 @@ impl SafetyChecker {
         let base_url = self
             .config
             .honeypot_api
-            .as_ref()
-            .map(|s| s.as_str())
+            .as_deref()
             .unwrap_or("https://api.honeypot.is/v2/IsHoneypot");
         let url = format!("{}?address={}", base_url, mint);
 
@@ -616,8 +704,7 @@ impl SafetyChecker {
         let base_url = self
             .config
             .rugcheck_api
-            .as_ref()
-            .map(|s| s.as_str())
+            .as_deref()
             .unwrap_or("https://api.rugcheck.xyz/v1/tokens");
         let url = format!("{}/{}", base_url, mint);
         if let Ok(resp) = self.http_client.get(&url).send().await {
@@ -638,6 +725,21 @@ impl SafetyChecker {
 
     pub fn add_blacklisted_keyword(&mut self, keyword: String) {
         self.blacklisted_keywords.insert(keyword.to_lowercase());
+    }
+
+    /// Get safety configuration (read-only access)
+    pub fn get_config(&self) -> &SafetyConfig {
+        &self.config
+    }
+
+    /// Check if creator is blacklisted (read-only access)
+    pub fn is_creator_blacklisted(&self, creator: &Pubkey) -> bool {
+        self.blacklisted_creators.contains(creator)
+    }
+
+    /// Check if keyword is blacklisted (read-only access)
+    pub fn is_keyword_blacklisted(&self, keyword: &str) -> bool {
+        self.blacklisted_keywords.contains(&keyword.to_lowercase())
     }
 
     /// Enhanced token analysis using Helius API
@@ -759,7 +861,7 @@ impl SafetyChecker {
             // Analyze transaction patterns
             let mut large_transfers = 0;
             let mut rapid_trades = 0;
-            let mut wash_trades = 0;
+            let wash_trades = 0;
 
             for tx in transactions {
                 if let Some(amount) = tx.get("amount").and_then(|v| v.as_f64()) {
@@ -770,7 +872,7 @@ impl SafetyChecker {
                 }
 
                 // Check for rapid trading patterns
-                if let Some(timestamp) = tx.get("timestamp").and_then(|v| v.as_u64()) {
+                if let Some(_timestamp) = tx.get("timestamp").and_then(|v| v.as_u64()) {
                     // This would need more sophisticated analysis
                     // For now, just count transactions
                     rapid_trades += 1;

@@ -2,9 +2,9 @@
 //!
 //! Test only our simple detector without the complex dependencies
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use log::{debug, error, info, warn};
-use serde_json::Value;
+
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -287,7 +287,7 @@ fn calculate_simple_score(token: &NewToken) -> f64 {
         score += 10.0; // Good size for sniping
     }
 
-    score.max(0.0).min(100.0)
+    score.clamp(0.0, 100.0)
 }
 
 #[tokio::main]

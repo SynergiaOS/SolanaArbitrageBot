@@ -16,6 +16,7 @@ use crate::sniper::types::*;
 /// Simple but effective token detector
 #[derive(Clone)]
 pub struct TokenDetector {
+    #[allow(dead_code)]
     rpc_client: Arc<RpcClient>,
     config: TokenDetectorConfig,
     new_tokens: Arc<RwLock<VecDeque<NewToken>>>,

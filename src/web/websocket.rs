@@ -13,6 +13,12 @@ use tokio::time::{interval, Duration};
 
 use super::{server::AppState, WebSocketMessage};
 
+// Security constants
+const MAX_MESSAGE_SIZE: usize = 1024; // 1KB max message size
+#[allow(dead_code)]
+const MAX_MESSAGES_PER_MINUTE: u32 = 60; // Rate limiting
+const WEBSOCKET_TIMEOUT: Duration = Duration::from_secs(300); // 5 minute timeout
+
 /// WebSocket upgrade handler
 pub async fn websocket_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {
     // Discord alert for dashboard connection
@@ -36,13 +42,24 @@ async fn websocket_connection(socket: WebSocket, state: AppState) {
     // Subscribe to broadcast messages
     let mut websocket_rx = state.websocket_tx.subscribe();
 
-    // Spawn task to handle incoming messages from client
+    // Spawn task to handle incoming messages from client with timeout
     let state_clone = state.clone();
     let sender_clone = sender.clone();
     let incoming_task = tokio::spawn(async move {
-        while let Some(msg) = receiver.next().await {
-            match msg {
+        let timeout_future = tokio::time::sleep(WEBSOCKET_TIMEOUT);
+        tokio::pin!(timeout_future);
+        loop {
+            tokio::select! {
+                msg = receiver.next() => {
+                    match msg {
+                        Some(msg) => match msg {
                 Ok(Message::Text(text)) => {
+                    // Validate message size
+                    if text.len() > MAX_MESSAGE_SIZE {
+                        warn!("Message too large: {} bytes (max: {})", text.len(), MAX_MESSAGE_SIZE);
+                        break;
+                    }
+
                     if let Err(e) = handle_client_message(&text, &state_clone).await {
                         warn!("Error handling client message: {}", e);
                     }
@@ -59,11 +76,22 @@ async fn websocket_connection(socket: WebSocket, state: AppState) {
                         break;
                     }
                 }
-                Err(e) => {
-                    error!("WebSocket error: {}", e);
+                            Err(e) => {
+                                error!("WebSocket error: {}", e);
+                                break;
+                            }
+                            _ => {}
+                        },
+                        None => {
+                            info!("WebSocket stream ended");
+                            break;
+                        }
+                    }
+                }
+                _ = &mut timeout_future => {
+                    warn!("WebSocket connection timed out after {} seconds", WEBSOCKET_TIMEOUT.as_secs());
                     break;
                 }
-                _ => {}
             }
         }
     });

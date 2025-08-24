@@ -26,6 +26,7 @@ struct Args {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[allow(dead_code)]
 struct RowCsv {
     timestamp: String,
     profit_usd: f64,

@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use regex::Regex;
 use reqwest::Client;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -28,6 +28,7 @@ pub struct NewToken {
 }
 
 pub struct TokenMonitor {
+    #[allow(dead_code)]
     rpc_client: Arc<RpcClient>,
     ws_url: String,
 }
@@ -193,13 +194,13 @@ impl TokenMonitor {
         })
     }
 
-    pub async fn calculate_liquidity(&self, pool_address: &Pubkey) -> Result<f64> {
+    pub async fn calculate_liquidity(&self, _pool_address: &Pubkey) -> Result<f64> {
         // Calculate pool liquidity in SOL
         // This would analyze pool accounts
         Ok(0.0)
     }
 
-    pub async fn estimate_market_cap(&self, mint: &Pubkey, liquidity_sol: f64) -> Result<f64> {
+    pub async fn estimate_market_cap(&self, _mint: &Pubkey, liquidity_sol: f64) -> Result<f64> {
         // Estimate market cap based on liquidity and token supply
         // This is a rough calculation
         Ok(liquidity_sol * 2.0 * 187.0) // Assume 2x liquidity = MC, SOL at $187

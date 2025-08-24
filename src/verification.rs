@@ -1,11 +1,11 @@
 //! On-chain transaction verification module
 //! Verifies arbitrage transactions after execution
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use log::{debug, info, warn};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{commitment_config::CommitmentConfig, signature::Signature};
-use solana_transaction_status::TransactionConfirmationStatus;
+
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
@@ -74,13 +74,12 @@ impl TransactionVerifier {
                         "✅ Transaction verified in {}ms: {}",
                         verification_time, signature
                     );
-                    return Ok(match result {
-                        (slot, confirmations) => VerificationResult::Confirmed {
-                            signature,
-                            slot,
-                            confirmations,
-                            verification_time_ms: verification_time,
-                        },
+                    let (slot, confirmations) = result;
+                    return Ok(VerificationResult::Confirmed {
+                        signature,
+                        slot,
+                        confirmations,
+                        verification_time_ms: verification_time,
                     });
                 }
                 Ok(None) => {
@@ -130,12 +129,12 @@ impl TransactionVerifier {
                 debug!("✅ Transaction {} confirmed", signature);
                 let slot = transaction.slot;
                 let confirmations = 1; // Confirmed level
-                return Ok(Some((slot, confirmations)));
+                Ok(Some((slot, confirmations)))
             }
             Err(_) => {
                 // Transaction not found or not confirmed yet
                 debug!("⏳ Transaction {} still pending...", signature);
-                return Ok(None);
+                Ok(None)
             }
         }
     }
@@ -217,7 +216,6 @@ pub enum ArbitrageVerification {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::str::FromStr;
 
     #[tokio::test]
     async fn test_verification_config_default() {
