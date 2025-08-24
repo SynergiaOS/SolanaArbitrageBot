@@ -35,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
     info!("✅ Token detector created successfully");
 
     // Start monitoring in background
-    let detector_clone = detector.clone();
+    let mut detector_clone = detector.clone();
     let monitoring_handle = tokio::spawn(async move {
         if let Err(e) = detector_clone.start_monitoring().await {
             error!("Monitoring error: {}", e);
@@ -144,7 +144,7 @@ async fn main() -> anyhow::Result<()> {
 
 /// Calculate a simple score for a token (0-100)
 fn calculate_simple_score(token: &NewToken) -> f64 {
-    let mut score = 0.0;
+    let mut score: f64 = 0.0;
 
     // Age bonus (newer = better for sniping)
     if token.age_minutes < 5.0 {

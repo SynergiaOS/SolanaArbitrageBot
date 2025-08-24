@@ -88,8 +88,8 @@ fn is_authenticated(headers: &HeaderMap, expected_token: &str) -> bool {
     // Check Authorization header
     if let Some(auth_header) = headers.get("authorization") {
         if let Ok(auth_str) = auth_header.to_str() {
-            if auth_str.starts_with("Bearer ") {
-                let token = &auth_str[7..]; // Remove "Bearer " prefix
+            if let Some(token) = auth_str.strip_prefix("Bearer ") {
+                // Remove "Bearer " prefix
                 return token == expected_token;
             }
         }
