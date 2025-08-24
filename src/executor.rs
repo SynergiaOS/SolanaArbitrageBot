@@ -129,9 +129,18 @@ impl TransactionExecutor {
 
     pub fn new(config: &crate::Config, dry_run: bool) -> Result<Self> {
         // Load wallet
-        let wallet = if config.wallet.use_ledger.unwrap_or(false) {
-            warn!("Ledger support not fully implemented yet - using keypair");
-            Self::setup_keypair_wallet(&config.wallet.path)?
+        // Load wallet: in dry-run and tests, allow missing wallet.json by using a dummy keypair
+        let wallet = if dry_run {
+            match Self::setup_keypair_wallet(&config.wallet.path) {
+                Ok(kp) => kp,
+                Err(_) => {
+                    warn!("No wallet file found; using ephemeral test keypair in dry-run mode");
+                    Self::setup_ephemeral_keypair()?
+                }
+            }
+        } else if config.wallet.use_ledger.unwrap_or(false) {
+            // For now, ledger signing is not implemented; refuse live mode with ledger
+            return Err(anyhow!("Ledger not yet fully implemented — use dry-run or keypair for testing"));
         } else {
             Self::setup_keypair_wallet(&config.wallet.path)?
         };
@@ -259,6 +268,14 @@ impl TransactionExecutor {
         wallet_bytes.fill(0);
 
         Ok(WalletType::Keypair(wallet))
+    }
+
+
+    // Create an ephemeral test keypair (in-memory) for dry-run/tests
+    fn setup_ephemeral_keypair() -> Result<WalletType> {
+        use solana_sdk::signature::Keypair;
+        let kp = Keypair::new();
+        Ok(WalletType::Keypair(kp))
     }
 
     pub async fn execute_arbitrage(&self, opportunity: &ArbitrageOpportunity) -> Result<Signature> {
