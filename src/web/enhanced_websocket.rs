@@ -9,6 +9,10 @@ use axum::{
 };
 use futures_util::{sink::SinkExt, stream::StreamExt};
 use log::{debug, error, info, warn};
+
+// Security constants
+const MAX_MESSAGE_SIZE: usize = 2048; // 2KB max message size for enhanced WS
+const MAX_MESSAGES_PER_MINUTE: u32 = 120; // Higher rate limit for enhanced features
 use serde_json;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -331,6 +335,25 @@ async fn enhanced_websocket_connection(socket: WebSocket, state: EnhancedWebSock
         while let Some(msg) = receiver.next().await {
             match msg {
                 Ok(Message::Text(text)) => {
+                    // Validate message size
+                    if text.len() > MAX_MESSAGE_SIZE {
+                        warn!("Enhanced WebSocket message too large: {} bytes (max: {})", text.len(), MAX_MESSAGE_SIZE);
+
+                        // Send error response for oversized message
+                        let error_msg = EnhancedWebSocketMessage::Error {
+                            message: "Message too large".to_string(),
+                            code: Some("MESSAGE_TOO_LARGE".to_string()),
+                        };
+
+                        if let Ok(json) = serde_json::to_string(&error_msg) {
+                            let mut sender_guard = sender_clone.lock().await;
+                            if let Err(send_err) = sender_guard.send(Message::Text(json)).await {
+                                error!("Failed to send error message: {}", send_err);
+                            }
+                        }
+                        break;
+                    }
+
                     if let Err(e) = handle_enhanced_client_message(&text, &state_clone).await {
                         warn!("Error handling enhanced client message: {}", e);
 

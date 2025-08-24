@@ -14,6 +14,7 @@ use tower::ServiceBuilder;
 use tower_http::{
     cors::{Any, CorsLayer},
     services::ServeDir,
+    timeout::TimeoutLayer,
 };
 
 use super::{
@@ -101,27 +102,23 @@ impl WebServer {
             config.host, config.port
         );
 
-        // Build CORS layer - allow frontend origin specifically
+        // Build secure CORS layer - restrict to specific origins
         let cors = CorsLayer::new()
             .allow_origin([
                 "http://localhost:3000".parse().unwrap(),
                 "http://127.0.0.1:3000".parse().unwrap(),
-                "http://localhost:3001".parse().unwrap(),
-                "http://127.0.0.1:3001".parse().unwrap(),
             ])
             .allow_methods([
                 Method::GET,
                 Method::POST,
-                Method::PUT,
-                Method::DELETE,
                 Method::OPTIONS,
             ])
             .allow_headers([
                 "content-type".parse().unwrap(),
                 "authorization".parse().unwrap(),
-                "x-requested-with".parse().unwrap(),
+                "x-api-key".parse().unwrap(),
             ])
-            .allow_credentials(true);
+            .allow_credentials(false); // Disable credentials for security
 
         // Build the router
         let app = Router::new()
@@ -139,9 +136,10 @@ impl WebServer {
             .route("/ws", get(websocket::websocket_handler))
             // Static files and dashboard
             .nest_service("/", ServeDir::new("dashboard-frontend/out"))
-            // Add middleware
+            // Add security middleware
             .layer(
                 ServiceBuilder::new()
+                    .layer(TimeoutLayer::new(std::time::Duration::from_secs(30))) // Request timeout
                     .layer(cors)
                     .layer(auth::auth_middleware(config.auth_token.clone())),
             )
