@@ -131,7 +131,6 @@ impl WebServer {
             // API routes
             .route("/api/status", get(handlers::get_bot_status))
             .route("/api/config", get(handlers::get_bot_config))
-            .route("/api/config", post(handlers::update_bot_config))
             .route("/api/transactions", get(handlers::get_transactions))
             .route("/api/stats", get(handlers::get_daily_stats))
             // Prometheus metrics endpoint (public)
