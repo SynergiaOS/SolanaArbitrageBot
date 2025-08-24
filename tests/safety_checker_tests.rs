@@ -17,13 +17,13 @@ fn create_mock_rpc_client() -> Arc<RpcClient> {
 async fn test_safety_config_default() {
     let config = SafetyConfig::default();
 
-    assert_eq!(config.min_liquidity_sol, 3.0);
-    assert_eq!(config.max_market_cap_usd, 100_000.0);
-    assert_eq!(config.max_buy_tax_percent, 5.0);
-    assert_eq!(config.max_sell_tax_percent, 5.0);
-    assert_eq!(config.max_token_age_minutes, 60);
-    assert_eq!(config.min_holders, 10);
-    assert_eq!(config.max_dev_percentage, 30.0);
+    assert_eq!(config.min_liquidity_sol, 5.0);
+    assert_eq!(config.max_market_cap_usd, 50_000.0);
+    assert_eq!(config.max_buy_tax_percent, 10.0);
+    assert_eq!(config.max_sell_tax_percent, 10.0);
+    assert_eq!(config.max_token_age_minutes, 5);
+    assert_eq!(config.min_holders, 20);
+    assert_eq!(config.max_dev_percentage, 20.0);
     assert!(config.enable_safety_checks);
 
     // Check default blacklist keywords
