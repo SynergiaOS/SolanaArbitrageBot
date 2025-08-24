@@ -144,7 +144,7 @@ async fn test_arbitrage_detection() -> Result<()> {
     println!("Testing arbitrage detection with real prices...");
 
     let config = test_config();
-    let calculator = calculator::ProfitCalculator::new(&config);
+    let mut calculator = calculator::ProfitCalculator::new(&config);
 
     // Simulate a price difference
     let raydium_price = 150.0;

@@ -227,7 +227,7 @@ impl SimpleTokenDetector {
 
 /// Calculate a simple score for a token (0-100)
 fn calculate_simple_score(token: &NewToken) -> f64 {
-    let mut score = 0.0;
+    let mut score: f64 = 0.0;
 
     // Age bonus (newer = better for sniping)
     if token.age_minutes < 5.0 {

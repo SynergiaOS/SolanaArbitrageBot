@@ -2,7 +2,7 @@
 //!
 //! Simple test to verify our token detector is working
 
-use log::{error, info};
+use log::{error, info, warn};
 use std::time::Duration;
 use tokio::time::timeout;
 
