@@ -151,11 +151,13 @@ impl TransactionExecutor {
             if dry_run { "DRY RUN" } else { "LIVE TRADING" }
         );
 
-        // Create optimized HTTP client
+        // Create secure HTTP client
         let http_client = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
             .pool_idle_timeout(Duration::from_secs(30))
             .pool_max_idle_per_host(10)
+            .danger_accept_invalid_certs(false) // Always verify TLS certificates
+            .https_only(true) // Only allow HTTPS connections
             .build()?;
 
         Ok(Self {
@@ -201,11 +203,11 @@ impl TransactionExecutor {
 
     fn setup_keypair_wallet(path: &str) -> Result<WalletType> {
         // Try reading as JSON array first
-        let wallet_str = std::fs::read_to_string(path)
+        let mut wallet_str = std::fs::read_to_string(path)
             .map_err(|e| anyhow!("Failed to read wallet from {}: {}", path, e))?;
 
         // Try parsing as JSON array
-        let wallet_bytes: Vec<u8> = if let Ok(bytes) = serde_json::from_str::<Vec<u8>>(&wallet_str)
+        let mut wallet_bytes: Vec<u8> = if let Ok(bytes) = serde_json::from_str::<Vec<u8>>(&wallet_str)
         {
             bytes
         } else if let Ok(bytes) = serde_json::from_str::<Vec<i8>>(&wallet_str) {
@@ -216,7 +218,12 @@ impl TransactionExecutor {
             return Err(anyhow!("Invalid wallet format in {}", path));
         };
 
+        // Clear sensitive data from memory
+        wallet_str.clear();
+
         if wallet_bytes.len() != 64 {
+            // Clear sensitive data before returning error
+            wallet_bytes.fill(0);
             return Err(anyhow!(
                 "Invalid wallet size: expected 64 bytes, got {}",
                 wallet_bytes.len()
@@ -224,7 +231,14 @@ impl TransactionExecutor {
         }
 
         let wallet = Keypair::try_from(&wallet_bytes[..])
-            .map_err(|e| anyhow!("Invalid wallet format: {}", e))?;
+            .map_err(|e| {
+                // Clear sensitive data before returning error
+                wallet_bytes.fill(0);
+                anyhow!("Invalid wallet format: {}", e)
+            })?;
+
+        // Clear sensitive data from memory
+        wallet_bytes.fill(0);
 
         Ok(WalletType::Keypair(wallet))
     }

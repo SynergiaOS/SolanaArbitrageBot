@@ -39,10 +39,18 @@ pub struct TradeResult {
 
 impl TradeExecutor {
     pub fn new(keypair: Arc<Keypair>, rpc_client: Arc<RpcClient>, jupiter_api_url: String) -> Self {
+        // Create secure HTTP client
+        let http_client = Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .danger_accept_invalid_certs(false) // Always verify TLS certificates
+            .https_only(true) // Only allow HTTPS connections
+            .build()
+            .expect("Failed to create secure HTTP client");
+
         Self {
             keypair,
             rpc_client,
-            http_client: Client::new(),
+            http_client,
             jupiter_api_url,
         }
     }
@@ -233,7 +241,8 @@ impl TradeExecutor {
             .send_and_confirm_transaction_with_spinner(&transaction)
             .await?;
 
-        info!("✅ Transaction confirmed: {}", signature);
+        let sig_str = signature.to_string();
+        info!("✅ Transaction confirmed: {}...{}", &sig_str[..8], &sig_str[sig_str.len()-8..]);
 
         Ok(signature.to_string())
     }

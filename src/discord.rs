@@ -37,7 +37,7 @@ impl DiscordAlert {
                 "fields": [
                     {
                         "name": "💳 Wallet",
-                        "value": format!("`{}`", wallet_address),
+                        "value": format!("`{}...{}`", &wallet_address[..8], &wallet_address[wallet_address.len()-8..]),
                         "inline": true
                     },
                     {

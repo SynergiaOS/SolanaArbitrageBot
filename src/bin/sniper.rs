@@ -73,7 +73,7 @@ async fn main() -> Result<()> {
     // Load wallet
     let wallet = load_wallet(&loaded.wallet_path)?;
     let wallet_addr = wallet.pubkey();
-    info!("💳 Wallet: {}", wallet_addr);
+    info!("💳 Wallet: {}...{}", &wallet_addr.to_string()[..8], &wallet_addr.to_string()[wallet_addr.to_string().len()-8..]);
 
     // Check wallet balance
     let rpc_client = solana_client::rpc_client::RpcClient::new(loaded.rpc_url.clone());

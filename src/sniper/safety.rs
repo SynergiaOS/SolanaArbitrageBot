@@ -17,7 +17,7 @@ use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct SafetyConfig {
     // Liquidity & Market Cap
     pub min_liquidity_sol: f64,
@@ -44,6 +44,27 @@ pub struct SafetyConfig {
 
     // Safety Settings
     pub enable_safety_checks: bool,
+}
+
+impl std::fmt::Debug for SafetyConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SafetyConfig")
+            .field("min_liquidity_sol", &self.min_liquidity_sol)
+            .field("max_market_cap_usd", &self.max_market_cap_usd)
+            .field("max_buy_tax_percent", &self.max_buy_tax_percent)
+            .field("max_sell_tax_percent", &self.max_sell_tax_percent)
+            .field("max_token_age_minutes", &self.max_token_age_minutes)
+            .field("min_holders", &self.min_holders)
+            .field("max_dev_percentage", &self.max_dev_percentage)
+            .field("blacklist_mints", &self.blacklist_mints)
+            .field("blacklisted_creators", &self.blacklisted_creators)
+            .field("blacklist_keywords", &self.blacklist_keywords)
+            .field("honeypot_api", &self.honeypot_api)
+            .field("rugcheck_api", &self.rugcheck_api)
+            .field("helius_api_key", &self.helius_api_key.as_ref().map(|_| "***MASKED***"))
+            .field("enable_safety_checks", &self.enable_safety_checks)
+            .finish()
+    }
 }
 
 impl Default for SafetyConfig {
@@ -110,9 +131,17 @@ impl SafetyChecker {
             .map(|k| k.to_lowercase())
             .collect();
 
+        // Create secure HTTP client
+        let http_client = Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .danger_accept_invalid_certs(false) // Always verify TLS certificates
+            .https_only(true) // Only allow HTTPS connections
+            .build()
+            .expect("Failed to create secure HTTP client");
+
         Self {
             config: config.clone(),
-            http_client: Client::new(),
+            http_client,
             rpc_client,
             blacklisted_creators,
             blacklisted_keywords,

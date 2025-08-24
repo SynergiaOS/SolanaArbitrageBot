@@ -62,11 +62,13 @@ impl DexMonitor {
         orca_price: Arc<Mutex<Option<Decimal>>>,
         config: &crate::Config,
     ) -> Result<Self> {
-        // Create optimized HTTP client
+        // Create secure HTTP client
         let http_client = reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
             .pool_idle_timeout(Duration::from_secs(30))
             .pool_max_idle_per_host(10)
+            .danger_accept_invalid_certs(false) // Always verify TLS certificates
+            .https_only(true) // Only allow HTTPS connections
             .build()
             .expect("Failed to create HTTP client");
 
