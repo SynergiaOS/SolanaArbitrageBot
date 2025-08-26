@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use regex::Regex;
 use reqwest::Client;
 use solana_client::nonblocking::rpc_client::RpcClient;

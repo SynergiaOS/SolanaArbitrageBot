@@ -1,0 +1,2103 @@
+    Checking solana-arbitrage-bot v0.1.0 (/home/marcin/windsurf/Projects/SolanaArbitrageBot)
+warning: unused imports: `MockServer`, `Mock`, and `ResponseTemplate`
+   --> src/sniper/safety.rs:997:20
+    |
+997 |     use wiremock::{Mock, MockServer, ResponseTemplate};
+    |                    ^^^^  ^^^^^^^^^^  ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` on by default
+
+warning: unused imports: `method` and `path`
+   --> src/sniper/safety.rs:998:30
+    |
+998 |     use wiremock::matchers::{method, path};
+    |                              ^^^^^^  ^^^^
+
+warning: unused import: `std::str::FromStr`
+   --> src/verification.rs:219:9
+    |
+219 |     use std::str::FromStr;
+    |         ^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `opportunity`
+   --> src/executor.rs:625:9
+    |
+625 |         opportunity: &ArbitrageOpportunity,
+    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_opportunity`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `error_type`
+   --> src/performance/error_handling.rs:271:57
+    |
+271 |     async fn should_circuit_break(&self, context: &str, error_type: &ErrorType) -> bool {
+    |                                                         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_error_type`
+
+warning: unused variable: `error`
+   --> src/performance/error_handling.rs:306:9
+    |
+306 |         error: &anyhow::Error,
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_error`
+
+warning: unused variable: `context`
+   --> src/performance/error_handling.rs:307:9
+    |
+307 |         context: &str,
+    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_context`
+
+warning: unused variable: `pool_address`
+   --> src/sniper/monitor.rs:196:45
+    |
+196 |     pub async fn calculate_liquidity(&self, pool_address: &Pubkey) -> Result<f64> {
+    |                                             ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_pool_address`
+
+warning: unused variable: `mint`
+   --> src/sniper/monitor.rs:202:45
+    |
+202 |     pub async fn estimate_market_cap(&self, mint: &Pubkey, liquidity_sol: f64) -> Result<f64> {
+    |                                             ^^^^ help: if this is intentional, prefix it with an underscore: `_mint`
+
+warning: unused variable: `account`
+   --> src/sniper/safety.rs:521:21
+    |
+521 |         if let Some(account) = account_info.value {
+    |                     ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_account`
+
+warning: unused variable: `timestamp`
+   --> src/sniper/safety.rs:787:29
+    |
+787 |                 if let Some(timestamp) = tx.get("timestamp").and_then(|v| v.as_u64()) {
+    |                             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_timestamp`
+
+warning: unused variable: `handles`
+   --> src/testing/integration_tests.rs:250:13
+    |
+250 |         let handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_handles`
+
+warning: value assigned to `results` is never read
+   --> src/testing/mod.rs:114:17
+    |
+114 |         let mut results = MasterTestResults::new();
+    |                 ^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` on by default
+
+warning: unused variable: `try_lock_error`
+   --> src/architecture/deadlock_free.rs:106:25
+    |
+106 |                     Err(try_lock_error) => {
+    |                         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_try_lock_error`
+
+warning: unused variable: `pattern`
+   --> src/security/wallet_manager.rs:192:9
+    |
+192 |     for pattern in dangerous_patterns {
+    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_pattern`
+
+warning: field `config` is never read
+   --> src/architecture/deadlock_free.rs:155:5
+    |
+147 | pub struct LockFreeSharedState {
+    |            ------------------- field in this struct
+...
+155 |     config: Arc<RwLock<StateConfig>>,
+    |     ^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: field `dex_fee_percent_f64` is never read
+  --> src/calculator.rs:48:5
+   |
+44 | pub struct ProfitCalculator {
+   |            ---------------- field in this struct
+...
+48 |     dex_fee_percent_f64: f64,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: constant `RAYDIUM_V4` is never used
+  --> src/executor.rs:30:7
+   |
+30 | const RAYDIUM_V4: &str = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
+   |       ^^^^^^^^^^
+
+warning: constant `ORCA_WHIRLPOOL` is never used
+  --> src/executor.rs:31:7
+   |
+31 | const ORCA_WHIRLPOOL: &str = "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc";
+   |       ^^^^^^^^^^^^^^
+
+warning: fields `last_valid_block_height` and `prioritization_fee` are never read
+  --> src/executor.rs:98:5
+   |
+96 | struct JupiterSwapResponse {
+   |        ------------------- fields in this struct
+97 |     swap_transaction: String,
+98 |     last_valid_block_height: u64,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+99 |     prioritization_fee: Option<u64>,
+   |     ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `JupiterSwapResponse` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: method `build_jupiter_swap_transaction` is never used
+   --> src/executor.rs:449:14
+    |
+117 | impl TransactionExecutor {
+    | ------------------------ method in this implementation
+...
+449 |     async fn build_jupiter_swap_transaction(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: fields `base_reserve`, `quote_reserve`, and `status` are never read
+  --> src/monitor.rs:28:9
+   |
+27 | struct RaydiumPoolState {
+   |        ---------------- fields in this struct
+28 |     pub base_reserve: u64,
+   |         ^^^^^^^^^^^^
+29 |     pub quote_reserve: u64,
+   |         ^^^^^^^^^^^^^
+30 |     pub status: u8,
+   |         ^^^^^^
+   |
+   = note: `RaydiumPoolState` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: fields `sqrt_price`, `liquidity`, and `tick_current` are never read
+  --> src/monitor.rs:35:9
+   |
+34 | struct OrcaWhirlpoolState {
+   |        ------------------ fields in this struct
+35 |     pub sqrt_price: u128,
+   |         ^^^^^^^^^^
+36 |     pub liquidity: u128,
+   |         ^^^^^^^^^
+37 |     pub tick_current: i32,
+   |         ^^^^^^^^^^^^
+   |
+   = note: `OrcaWhirlpoolState` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: fields `rpc_url` and `ws_url` are never read
+  --> src/monitor.rs:43:5
+   |
+40 | pub struct DexMonitor {
+   |            ---------- fields in this struct
+...
+43 |     rpc_url: String,
+   |     ^^^^^^^
+44 |     ws_url: String,
+   |     ^^^^^^
+
+warning: fields `created_at`, `error_count`, and `endpoint_url` are never read
+  --> src/performance/connection_pool.rs:54:5
+   |
+52 | struct PooledConnection {
+   |        ---------------- fields in this struct
+53 |     client: Arc<RpcClient>,
+54 |     created_at: Instant,
+   |     ^^^^^^^^^^
+...
+57 |     error_count: u64,
+   |     ^^^^^^^^^^^
+58 |     is_healthy: bool,
+59 |     endpoint_url: String,
+   |     ^^^^^^^^^^^^
+   |
+   = note: `PooledConnection` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: method `update_usage` is never used
+  --> src/performance/connection_pool.rs:84:8
+   |
+62 | impl PooledConnection {
+   | --------------------- method in this implementation
+...
+84 |     fn update_usage(&mut self, success: bool) {
+   |        ^^^^^^^^^^^^
+
+warning: method `record_success` is never used
+   --> src/performance/error_handling.rs:404:8
+    |
+379 | impl CircuitBreaker {
+    | ------------------- method in this implementation
+...
+404 |     fn record_success(&mut self) {
+    |        ^^^^^^^^^^^^^^
+
+warning: field `amount_sol` is never read
+   --> src/safety.rs:127:5
+    |
+124 | struct TradeRecord {
+    |        ----------- field in this struct
+...
+127 |     amount_sol: f64,
+    |     ^^^^^^^^^^
+    |
+    = note: `TradeRecord` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: field `expected_return` is never read
+  --> src/security/flash_loan_guard.rs:40:5
+   |
+36 | struct ActiveLoan {
+   |        ---------- field in this struct
+...
+40 |     expected_return: f64,
+   |     ^^^^^^^^^^^^^^^
+
+warning: fields `keypair`, `rpc_client`, and `safety_config` are never read
+   --> src/sniper/mod.rs:125:5
+    |
+124 | pub struct SniperEngine {
+    |            ------------ fields in this struct
+125 |     keypair: Arc<Keypair>,
+    |     ^^^^^^^
+126 |     rpc_client: Arc<RpcClient>,
+    |     ^^^^^^^^^^
+127 |     config: SniperConfig,
+128 |     safety_config: SafetyConfig,
+    |     ^^^^^^^^^^^^^
+
+warning: field `rpc_client` is never read
+  --> src/sniper/monitor.rs:31:5
+   |
+30 | pub struct TokenMonitor {
+   |            ------------ field in this struct
+31 |     rpc_client: Arc<RpcClient>,
+   |     ^^^^^^^^^^
+
+warning: field `config` is never read
+  --> src/sniper/position.rs:32:5
+   |
+30 | pub struct PositionManager {
+   |            --------------- field in this struct
+31 |     positions: Arc<Mutex<HashMap<Pubkey, Position>>>,
+32 |     config: SniperConfig,
+   |     ^^^^^^
+
+warning: field `rpc_client` is never read
+  --> src/sniper/detector.rs:19:5
+   |
+18 | pub struct TokenDetector {
+   |            ------------- field in this struct
+19 |     rpc_client: Arc<RpcClient>,
+   |     ^^^^^^^^^^
+   |
+   = note: `TokenDetector` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: field `test_keypair` is never read
+  --> src/testing/integration_tests.rs:22:5
+   |
+18 | pub struct IntegrationTestSuite {
+   |            -------------------- field in this struct
+...
+22 |     test_keypair: Arc<Keypair>,
+   |     ^^^^^^^^^^^^
+
+warning: function `enhanced_websocket_connection` is never used
+   --> src/web/enhanced_websocket.rs:318:10
+    |
+318 | async fn enhanced_websocket_connection(socket: WebSocket, state: EnhancedWebSocketState) {
+    |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: you should consider adding a `Default` implementation for `AtomicPriceState`
+  --> src/architecture/atomic_state.rs:26:5
+   |
+26 | /     pub fn new() -> Self {
+27 | |         Self {
+28 | |             raydium_price_scaled: Arc::new(AtomicU64::new(0)),
+29 | |             orca_price_scaled: Arc::new(AtomicU64::new(0)),
+...  |
+35 | |     }
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+   = note: `-W clippy::new-without-default` implied by `-W clippy::all`
+   = help: to override `-W clippy::all` add `#[allow(clippy::new_without_default)]`
+help: try adding this
+   |
+25 + impl Default for AtomicPriceState {
+26 +     fn default() -> Self {
+27 +         Self::new()
+28 +     }
+29 + }
+   |
+
+warning: you should consider adding a `Default` implementation for `LockFreeSharedState`
+   --> src/architecture/deadlock_free.rs:163:5
+    |
+163 | /     pub fn new() -> Self {
+164 | |         Self {
+165 | |             trades_today: Arc::new(AtomicU64::new(0)),
+166 | |             profit_today: Arc::new(RwLock::new(0.0)),
+...   |
+171 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+help: try adding this
+    |
+162 + impl Default for LockFreeSharedState {
+163 +     fn default() -> Self {
+164 +         Self::new()
+165 +     }
+166 + }
+    |
+
+warning: you should consider adding a `Default` implementation for `EnhancedSharedState`
+  --> src/architecture/mod.rs:39:5
+   |
+39 | /     pub fn new() -> Self {
+40 | |         Self {
+41 | |             price_state: Arc::new(AtomicPriceState::new()),
+42 | |             lock_free_state: Arc::new(LockFreeSharedState::new()),
+...  |
+47 | |     }
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+help: try adding this
+   |
+38 + impl Default for EnhancedSharedState {
+39 +     fn default() -> Self {
+40 +         Self::new()
+41 +     }
+42 + }
+   |
+
+warning: calls to `push` immediately after creation
+   --> src/executor.rs:635:9
+    |
+635 | /         let mut instructions = vec![];
+636 | |
+637 | |         // Add compute budget instruction
+638 | |         instructions.push(ComputeBudgetInstruction::set_compute_unit_price(
+...   |
+643 | |         instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(300_000));
+    | |_____________________________________________________________________________________^ help: consider using the `vec![]` macro: `let instructions = vec![..];`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#vec_init_then_push
+    = note: `-W clippy::vec-init-then-push` implied by `-W clippy::all`
+    = help: to override `-W clippy::all` add `#[allow(clippy::vec_init_then_push)]`
+
+warning: this function has too many arguments (8/7)
+   --> src/monitor.rs:174:5
+    |
+174 | /     async fn monitor_raydium_optimized(
+175 | |         price_state: Arc<Mutex<Option<Decimal>>>,
+176 | |         http_client: reqwest::Client,
+177 | |         price_cache: Arc<Mutex<HashMap<String, (Decimal, Instant)>>>,
+...   |
+182 | |         pool_address: String,
+183 | |     ) -> Result<()> {
+    | |___________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+    = note: `-W clippy::too-many-arguments` implied by `-W clippy::all`
+    = help: to override `-W clippy::all` add `#[allow(clippy::too_many_arguments)]`
+
+warning: this function has too many arguments (8/7)
+   --> src/monitor.rs:273:5
+    |
+273 | /     async fn monitor_orca_optimized(
+274 | |         price_state: Arc<Mutex<Option<Decimal>>>,
+275 | |         http_client: reqwest::Client,
+276 | |         price_cache: Arc<Mutex<HashMap<String, (Decimal, Instant)>>>,
+...   |
+281 | |         pool_address: String,
+282 | |     ) -> Result<()> {
+    | |___________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+warning: redundant closure
+   --> src/performance/connection_pool.rs:335:18
+    |
+335 |             .map(|conn| Arc::new(conn))
+    |                  ^^^^^^^^^^^^^^^^^^^^^ help: replace the closure with the function itself: `Arc::new`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#redundant_closure
+    = note: `-W clippy::redundant-closure` implied by `-W clippy::all`
+    = help: to override `-W clippy::all` add `#[allow(clippy::redundant_closure)]`
+
+warning: you should consider adding a `Default` implementation for `SecureWalletManager`
+  --> src/security/wallet_manager.rs:15:5
+   |
+15 | /     pub fn new() -> Self {
+16 | |         Self {
+17 | |             encryption_key: env::var("WALLET_ENCRYPTION_KEY").ok(),
+18 | |             wallet_dir: env::var("WALLET_DIR").unwrap_or_else(|_| ".wallets".to_string()),
+19 | |         }
+20 | |     }
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+help: try adding this
+   |
+14 + impl Default for SecureWalletManager {
+15 +     fn default() -> Self {
+16 +         Self::new()
+17 +     }
+18 + }
+   |
+
+warning: you should consider adding a `Default` implementation for `SecurityManager`
+  --> src/security/mod.rs:28:5
+   |
+28 | /     pub fn new() -> Self {
+29 | |         Self {
+30 | |             wallet_manager: SecureWalletManager::new(),
+31 | |             rate_limiter: RateLimiter::new(RateLimitConfig::default()),
+...  |
+34 | |     }
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+help: try adding this
+   |
+27 + impl Default for SecurityManager {
+28 +     fn default() -> Self {
+29 +         Self::new()
+30 +     }
+31 + }
+   |
+
+warning: called `.as_ref().map(|s| s.as_str())` on an `Option` value
+   --> src/sniper/safety.rs:587:24
+    |
+587 |           let base_url = self
+    |  ________________________^
+588 | |             .config
+589 | |             .honeypot_api
+590 | |             .as_ref()
+591 | |             .map(|s| s.as_str())
+    | |________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#option_as_ref_deref
+    = note: `-W clippy::option-as-ref-deref` implied by `-W clippy::all`
+    = help: to override `-W clippy::all` add `#[allow(clippy::option_as_ref_deref)]`
+help: consider using as_deref
+    |
+587 ~         let base_url = self
+588 +             .config
+589 +             .honeypot_api.as_deref()
+    |
+
+warning: called `.as_ref().map(|s| s.as_str())` on an `Option` value
+   --> src/sniper/safety.rs:616:24
+    |
+616 |           let base_url = self
+    |  ________________________^
+617 | |             .config
+618 | |             .rugcheck_api
+619 | |             .as_ref()
+620 | |             .map(|s| s.as_str())
+    | |________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#option_as_ref_deref
+help: consider using as_deref
+    |
+616 ~         let base_url = self
+617 +             .config
+618 +             .rugcheck_api.as_deref()
+    |
+
+warning: redundant pattern matching, consider using `is_ok()`
+   --> src/testing/integration_tests.rs:304:20
+    |
+304 |             if let Ok(_) = self.rpc_client.get_slot() {
+    |             -------^^^^^----------------------------- help: try: `if self.rpc_client.get_slot().is_ok()`
+    |
+    = note: this will change drop order of the result, as well as all temporaries
+    = note: add `#[allow(clippy::redundant_pattern_matching)]` if this is important
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#redundant_pattern_matching
+    = note: `-W clippy::redundant-pattern-matching` implied by `-W clippy::all`
+    = help: to override `-W clippy::all` add `#[allow(clippy::redundant_pattern_matching)]`
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> src/sniper/safety.rs:924:9
+    |
+924 |         cfg.min_liquidity_sol = 3.0;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `sniper::SafetyConfig { min_liquidity_sol: 3.0, blacklisted_creators: vec![], blacklist_keywords: vec![], ..Default::default() }` and removing relevant reassignments
+   --> src/sniper/safety.rs:923:9
+    |
+923 |         let mut cfg = SafetyConfig::default();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+    = note: `-W clippy::field-reassign-with-default` implied by `-W clippy::all`
+    = help: to override `-W clippy::all` add `#[allow(clippy::field_reassign_with_default)]`
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> src/sniper/safety.rs:938:9
+    |
+938 |         cfg.min_liquidity_sol = 20.0; // require 20 SOL
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `sniper::SafetyConfig { min_liquidity_sol: 20.0, ..Default::default() }` and removing relevant reassignments
+   --> src/sniper/safety.rs:937:9
+    |
+937 |         let mut cfg = SafetyConfig::default();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> src/sniper/safety.rs:966:9
+    |
+966 |         cfg.blacklist_keywords = vec!["rug".into()];
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `sniper::SafetyConfig { blacklist_keywords: vec!["rug".into()], ..Default::default() }` and removing relevant reassignments
+   --> src/sniper/safety.rs:965:9
+    |
+965 |         let mut cfg = SafetyConfig::default();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> src/sniper/safety.rs:979:9
+    |
+979 |         cfg.max_buy_tax_percent = 5.0;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `sniper::SafetyConfig { max_buy_tax_percent: 5.0, max_sell_tax_percent: 5.0, ..Default::default() }` and removing relevant reassignments
+   --> src/sniper/safety.rs:978:9
+    |
+978 |         let mut cfg = SafetyConfig::default();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+    --> src/sniper/safety.rs:1048:9
+     |
+1048 |         cfg.max_buy_tax_percent = 5.0;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+note: consider initializing the variable with `sniper::SafetyConfig { max_buy_tax_percent: 5.0, max_sell_tax_percent: 5.0, rugcheck_api: Some(server.uri()), max_market_cap_usd: 0.0, min_holders: 0, max_dev_percentage: 0.0, max_token_age_minutes: 0, ..Default::default() }` and removing relevant reassignments
+    --> src/sniper/safety.rs:1047:9
+     |
+1047 |         let mut cfg = SafetyConfig::default();
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+    --> src/sniper/safety.rs:1082:9
+     |
+1082 |         cfg.max_buy_tax_percent = 5.0;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+note: consider initializing the variable with `sniper::SafetyConfig { max_buy_tax_percent: 5.0, max_sell_tax_percent: 5.0, rugcheck_api: Some(server.uri()), max_market_cap_usd: 0.0, min_holders: 0, max_dev_percentage: 0.0, max_token_age_minutes: 0, ..Default::default() }` and removing relevant reassignments
+    --> src/sniper/safety.rs:1081:9
+     |
+1081 |         let mut cfg = SafetyConfig::default();
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+
+warning: checking if a string is ascii using iterators
+   --> src/testing/security_tests.rs:106:16
+    |
+106 |             && input.chars().all(|c| c.is_ascii())
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `input.is_ascii()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_character_iteration
+    = note: `-W clippy::needless-character-iteration` implied by `-W clippy::all`
+    = help: to override `-W clippy::all` add `#[allow(clippy::needless_character_iteration)]`
+
+warning: match expression looks like `matches!` macro
+   --> src/testing/security_tests.rs:170:9
+    |
+170 | /         match (role, action) {
+171 | |             ("admin", _) => true,
+172 | |             ("user", "user_action") => true,
+173 | |             _ => false,
+174 | |         }
+    | |_________^ help: try: `matches!((role, action), ("admin", _) | ("user", "user_action"))`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#match_like_matches_macro
+    = note: `-W clippy::match-like-matches-macro` implied by `-W clippy::all`
+    = help: to override `-W clippy::all` add `#[allow(clippy::match_like_matches_macro)]`
+
+warning: this `map_or` can be simplified
+   --> src/testing/mod.rs:400:30
+    |
+400 |         let integration_ok = self.integration_results.as_ref().map_or(true, |r| r.overall_success);
+    |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unnecessary_map_or
+    = note: `-W clippy::unnecessary-map-or` implied by `-W clippy::all`
+    = help: to override `-W clippy::all` add `#[allow(clippy::unnecessary_map_or)]`
+help: use is_none_or instead
+    |
+400 -         let integration_ok = self.integration_results.as_ref().map_or(true, |r| r.overall_success);
+400 +         let integration_ok = self.integration_results.as_ref().is_none_or(|r| r.overall_success);
+    |
+
+warning: this `map_or` can be simplified
+   --> src/testing/mod.rs:401:30
+    |
+401 |         let performance_ok = self.performance_results.as_ref().map_or(true, |r| r.overall_success);
+    |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unnecessary_map_or
+help: use is_none_or instead
+    |
+401 -         let performance_ok = self.performance_results.as_ref().map_or(true, |r| r.overall_success);
+401 +         let performance_ok = self.performance_results.as_ref().is_none_or(|r| r.overall_success);
+    |
+
+warning: this `map_or` can be simplified
+   --> src/testing/mod.rs:402:27
+    |
+402 |         let security_ok = self.security_results.as_ref().map_or(true, |r| r.overall_success);
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unnecessary_map_or
+help: use is_none_or instead
+    |
+402 -         let security_ok = self.security_results.as_ref().map_or(true, |r| r.overall_success);
+402 +         let security_ok = self.security_results.as_ref().is_none_or(|r| r.overall_success);
+    |
+
+warning: this match could be written as a `let` statement
+  --> src/verification.rs:76:31
+   |
+76 |                       return Ok(match result {
+   |  _______________________________^
+77 | |                         (slot, confirmations) => VerificationResult::Confirmed {
+78 | |                             signature,
+79 | |                             slot,
+...  |
+82 | |                         },
+83 | |                     });
+   | |_____________________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#match_single_binding
+   = note: `-W clippy::match-single-binding` implied by `-W clippy::all`
+   = help: to override `-W clippy::all` add `#[allow(clippy::match_single_binding)]`
+help: consider using a `let` statement
+   |
+76 ~                     return Ok(let (slot, confirmations) = result;
+77 +                     VerificationResult::Confirmed {
+78 +                         signature,
+79 +                         slot,
+80 +                         confirmations,
+81 +                         verification_time_ms: verification_time,
+82 ~                     });
+   |
+
+warning: unneeded `return` statement
+   --> src/verification.rs:132:17
+    |
+132 |                 return Ok(Some((slot, confirmations)));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_return
+    = note: `-W clippy::needless-return` implied by `-W clippy::all`
+    = help: to override `-W clippy::all` add `#[allow(clippy::needless_return)]`
+help: remove `return`
+    |
+132 -                 return Ok(Some((slot, confirmations)));
+132 +                 Ok(Some((slot, confirmations)))
+    |
+
+warning: unneeded `return` statement
+   --> src/verification.rs:137:17
+    |
+137 |                 return Ok(None);
+    |                 ^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_return
+help: remove `return`
+    |
+137 -                 return Ok(None);
+137 +                 Ok(None)
+    |
+
+warning: this expression creates a reference which is immediately dereferenced by the compiler
+  --> src/web/auth.rs:66:34
+   |
+66 |             if !is_authenticated(&request.headers(), expected_token) {
+   |                                  ^^^^^^^^^^^^^^^^^^ help: change this to: `request.headers()`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_borrow
+   = note: `-W clippy::needless-borrow` implied by `-W clippy::all`
+   = help: to override `-W clippy::all` add `#[allow(clippy::needless_borrow)]`
+
+warning: this function has too many arguments (8/7)
+   --> src/web/enhanced_websocket.rs:134:5
+    |
+134 | /     pub async fn create_transaction_request(
+135 | |         &self,
+136 | |         wallet_address: String,
+137 | |         transaction_type: String,
+...   |
+142 | |         metadata: Option<TransactionMetadata>,
+143 | |     ) -> Result<String, String> {
+    | |_______________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+warning: `solana-arbitrage-bot` (lib) generated 54 warnings (run `cargo clippy --fix --lib -p solana-arbitrage-bot` to apply 15 suggestions)
+warning: `solana-arbitrage-bot` (lib test) generated 63 warnings (54 duplicates) (run `cargo clippy --fix --lib -p solana-arbitrage-bot --tests` to apply 3 suggestions)
+warning: this import is redundant
+  --> src/main.rs:12:1
+   |
+12 | use uuid;
+   | ^^^^^^^^^ help: remove it entirely
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#single_component_path_imports
+   = note: `-W clippy::single-component-path-imports` implied by `-W clippy::all`
+   = help: to override `-W clippy::all` add `#[allow(clippy::single_component_path_imports)]`
+
+warning: fields `max_daily_loss_sol` and `max_positions` are never read
+   --> src/bin/sniper.rs:191:5
+    |
+190 | struct RiskSection {
+    |        ----------- fields in this struct
+191 |     max_daily_loss_sol: Option<f64>,
+    |     ^^^^^^^^^^^^^^^^^^
+192 |     max_positions: Option<u32>,
+    |     ^^^^^^^^^^^^^
+    |
+    = note: `RiskSection` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` on by default
+
+warning: unused variable: `web_handle`
+   --> src/main.rs:213:9
+    |
+213 |     let web_handle = if let Some(web_server) = web_server {
+    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_web_handle`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `monitor_handle`
+   --> src/main.rs:224:9
+    |
+224 |     let monitor_handle = tokio::spawn(async move {
+    |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_monitor_handle`
+
+warning: unused variable: `price_handler`
+   --> src/main.rs:233:9
+    |
+233 |     let price_handler = tokio::spawn(async move {
+    |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_price_handler`
+
+warning: manual implementation of `Option::map`
+   --> src/main.rs:213:22
+    |
+213 |       let web_handle = if let Some(web_server) = web_server {
+    |  ______________________^
+214 | |         Some(tokio::spawn(async move {
+215 | |             if let Err(e) = web_server.start().await {
+216 | |                 error!("Web server error: {}", e);
+...   |
+220 | |         None
+221 | |     };
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_map
+    = note: `-W clippy::manual-map` implied by `-W clippy::all`
+    = help: to override `-W clippy::all` add `#[allow(clippy::manual_map)]`
+help: try
+    |
+213 ~     let web_handle = web_server.map(|web_server| tokio::spawn(async move {
+214 +             if let Err(e) = web_server.start().await {
+215 +                 error!("Web server error: {}", e);
+216 +             }
+217 ~         }));
+    |
+
+warning: `solana-arbitrage-bot` (bin "sniper") generated 1 warning
+warning: `solana-arbitrage-bot` (bin "solana-arbitrage-bot" test) generated 5 warnings (run `cargo clippy --fix --bin "solana-arbitrage-bot" --tests` to apply 2 suggestions)
+error: cannot find macro `anyhow` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:436:22
+    |
+436 |         .map_err(|e| anyhow!("Failed to read config file {}: {}", config_path, e))?;
+    |                      ^^^^^^
+    |
+    = note: `anyhow` is in scope, but it is a crate, not a macro
+help: consider importing this macro
+    |
+5   + use anyhow::anyhow;
+    |
+
+error: cannot find macro `anyhow` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:439:22
+    |
+439 |         .map_err(|e| anyhow!("Failed to parse config: {}", e))?;
+    |                      ^^^^^^
+    |
+    = note: `anyhow` is in scope, but it is a crate, not a macro
+help: consider importing this macro
+    |
+5   + use anyhow::anyhow;
+    |
+
+error: cannot find macro `info` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:109:9
+    |
+109 |         info!("🚀 Initializing Enhanced Solana Arbitrage Bot...");
+    |         ^^^^
+    |
+help: consider importing this macro
+    |
+5   + use log::info;
+    |
+
+error: cannot find macro `anyhow` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:117:30
+    |
+117 |                 .map_err(|e| anyhow!("Failed to load wallet: {}", e))?,
+    |                              ^^^^^^
+    |
+    = note: `anyhow` is in scope, but it is a crate, not a macro
+help: consider importing this macro
+    |
+5   + use anyhow::anyhow;
+    |
+
+error: cannot find macro `info` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:153:9
+    |
+153 |         info!("🔧 Initializing system components...");
+    |         ^^^^
+    |
+help: consider importing this macro
+    |
+5   + use log::info;
+    |
+
+error: cannot find macro `info` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:184:9
+    |
+184 |         info!("✅ All components initialized successfully");
+    |         ^^^^
+    |
+help: consider importing this macro
+    |
+5   + use log::info;
+    |
+
+error: cannot find macro `info` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:190:9
+    |
+190 |         info!("📊 Initializing arbitrage components...");
+    |         ^^^^
+    |
+help: consider importing this macro
+    |
+5   + use log::info;
+    |
+
+warning: unused import: `anyhow`
+ --> src/bin/simple_detector_test.rs:5:14
+  |
+5 | use anyhow::{anyhow, Result};
+  |              ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `serde_json::Value`
+ --> src/bin/simple_detector_test.rs:7:5
+  |
+7 | use serde_json::Value;
+  |     ^^^^^^^^^^^^^^^^^
+
+error: cannot find macro `info` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:216:9
+    |
+216 |         info!("🎯 Initializing sniper components...");
+    |         ^^^^
+    |
+help: consider importing this macro
+    |
+5   + use log::info;
+    |
+
+error: cannot find macro `info` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:229:9
+    |
+229 |         info!("🧬 Initializing GEPA optimizer...");
+    |         ^^^^
+    |
+help: consider importing this macro
+    |
+5   + use log::info;
+    |
+
+error: cannot find macro `info` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:238:9
+    |
+238 |         info!("🔄 Initializing Kestra orchestration...");
+    |         ^^^^
+    |
+help: consider importing this macro
+    |
+5   + use log::info;
+    |
+
+error: cannot find macro `info` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:248:13
+    |
+248 |             info!("📢 Initializing Discord alerts...");
+    |             ^^^^
+    |
+help: consider importing this macro
+    |
+5   + use log::info;
+    |
+
+error: cannot find macro `info` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:257:13
+    |
+257 |             info!("🌐 Initializing web dashboard...");
+    |             ^^^^
+    |
+help: consider importing this macro
+    |
+5   + use log::info;
+    |
+
+error: cannot find macro `info` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:268:9
+    |
+268 |         info!("🚀 Starting Enhanced Solana Arbitrage Bot...");
+    |         ^^^^
+    |
+help: consider importing this macro
+    |
+5   + use log::info;
+    |
+
+error: cannot find macro `info` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:309:9
+    |
+309 |         info!("✅ Enhanced Solana Arbitrage Bot started successfully!");
+    |         ^^^^
+    |
+help: consider importing this macro
+    |
+5   + use log::info;
+    |
+
+error: cannot find macro `info` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:310:9
+    |
+310 |         info!(
+    |         ^^^^
+    |
+help: consider importing this macro
+    |
+5   + use log::info;
+    |
+
+error: cannot find macro `info` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:362:21
+    |
+362 |                     info!("🧬 Starting weekly GEPA optimization...");
+    |                     ^^^^
+    |
+help: consider importing this macro
+    |
+5   + use log::info;
+    |
+
+error: cannot find macro `error` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:364:25
+    |
+364 |                         error!("GEPA optimization failed: {}", e);
+    |                         ^^^^^
+    |
+help: consider importing this macro
+    |
+5   + use log::error;
+    |
+
+error: cannot find macro `info` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:366:25
+    |
+366 |                         info!("✅ GEPA optimization completed");
+    |                         ^^^^
+    |
+help: consider importing this macro
+    |
+5   + use log::info;
+    |
+
+error: cannot find macro `info` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:451:9
+    |
+451 |         info!(
+    |         ^^^^
+    |
+help: consider importing this macro
+    |
+5   + use log::info;
+    |
+
+warning: clamp-like pattern without using clamp function
+   --> src/bin/simple_detector_test.rs:290:5
+    |
+290 |     score.max(0.0).min(100.0)
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with clamp: `score.clamp(0.0, 100.0)`
+    |
+    = note: clamp will panic if max < min, min.is_nan(), or max.is_nan()
+    = note: clamp returns NaN if the input is NaN
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_clamp
+    = note: `-W clippy::manual-clamp` implied by `-W clippy::all`
+    = help: to override `-W clippy::all` add `#[allow(clippy::manual_clamp)]`
+
+error[E0412]: cannot find type `Config` in this scope
+ --> src/bin/enhanced_arbitrage_bot.rs:9:15
+  |
+9 |     pub core: Config,
+  |               ^^^^^^ not found in this scope
+  |
+help: consider importing one of these items
+  |
+5 + use base64::engine::Config;
+  |
+5 + use bincode::Config;
+  |
+5 + use config::Config;
+  |
+5 + use solana_arbitrage_bot::Config;
+  |
+    and 1 other candidate
+
+error[E0412]: cannot find type `EnhancedSniperConfig` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:12:17
+   |
+12 |     pub sniper: EnhancedSniperConfig,
+   |                 ^^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0412]: cannot find type `GepaConfig` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:15:15
+   |
+15 |     pub gepa: GepaConfig,
+   |               ^^^^^^^^^^ not found in this scope
+
+error[E0412]: cannot find type `KestraConfig` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:18:17
+   |
+18 |     pub kestra: KestraConfig,
+   |                 ^^^^^^^^^^^^ not found in this scope
+
+error[E0412]: cannot find type `Arc` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:53:17
+   |
+53 |     rpc_client: Arc<RpcClient>,
+   |                 ^^^ not found in this scope
+   |
+help: consider importing this struct
+   |
+5  + use std::sync::Arc;
+   |
+
+error[E0412]: cannot find type `RpcClient` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:53:21
+   |
+53 |     rpc_client: Arc<RpcClient>,
+   |                     ^^^^^^^^^ not found in this scope
+   |
+help: consider importing one of these structs
+   |
+5  + use solana_client::nonblocking::rpc_client::RpcClient;
+   |
+5  + use solana_client::rpc_client::RpcClient;
+   |
+
+error[E0412]: cannot find type `Arc` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:54:14
+   |
+54 |     keypair: Arc<Keypair>,
+   |              ^^^ not found in this scope
+   |
+help: consider importing this struct
+   |
+5  + use std::sync::Arc;
+   |
+
+error[E0412]: cannot find type `Keypair` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:54:18
+   |
+54 |     keypair: Arc<Keypair>,
+   |                  ^^^^^^^ not found in this scope
+   |
+help: consider importing this struct
+   |
+5  + use solana_sdk::signer::keypair::Keypair;
+   |
+
+error[E0412]: cannot find type `SharedState` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:55:19
+   |
+55 |     shared_state: SharedState,
+   |                   ^^^^^^^^^^^ not found in this scope
+   |
+help: consider importing this struct
+   |
+5  + use solana_arbitrage_bot::SharedState;
+   |
+
+error[E0412]: cannot find type `DexMonitor` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:58:25
+   |
+58 |     dex_monitor: Option<DexMonitor>,
+   |                         ^^^^^^^^^^ not found in this scope
+   |
+help: consider importing this struct
+   |
+5  + use solana_arbitrage_bot::DexMonitor;
+   |
+
+error[E0412]: cannot find type `ProfitCalculator` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:59:31
+   |
+59 |     profit_calculator: Option<ProfitCalculator>,
+   |                               ^^^^^^^^^^^^^^^^ not found in this scope
+   |
+help: consider importing this struct
+   |
+5  + use solana_arbitrage_bot::ProfitCalculator;
+   |
+
+error[E0412]: cannot find type `TransactionExecutor` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:60:34
+   |
+60 |     transaction_executor: Option<TransactionExecutor>,
+   |                                  ^^^^^^^^^^^^^^^^^^^ not found in this scope
+   |
+help: consider importing one of these structs
+   |
+5  + use solana_arbitrage_bot::TransactionExecutor;
+   |
+5  + use solana_client::transaction_executor::TransactionExecutor;
+   |
+
+error[E0412]: cannot find type `SafetyGuard` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:61:26
+   |
+61 |     safety_guard: Option<SafetyGuard>,
+   |                          ^^^^^^^^^^^ not found in this scope
+   |
+help: consider importing this struct
+   |
+5  + use solana_arbitrage_bot::SafetyGuard;
+   |
+
+error[E0412]: cannot find type `EnhancedSniperBot` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:64:24
+   |
+64 |     sniper_bot: Option<EnhancedSniperBot>,
+   |                        ^^^^^^^^^^^^^^^^^ not found in this scope
+   |
+help: you might be missing a type parameter
+   |
+49 | struct EnhancedTradingSystem<EnhancedSniperBot> {
+   |                             +++++++++++++++++++
+
+error[E0412]: cannot find type `GepaOptimizer` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:65:28
+   |
+65 |     gepa_optimizer: Option<GepaOptimizer>,
+   |                            ^^^^^^^^^^^^^ not found in this scope
+   |
+help: you might be missing a type parameter
+   |
+49 | struct EnhancedTradingSystem<GepaOptimizer> {
+   |                             +++++++++++++++
+
+error[E0412]: cannot find type `KestraOrchestrator` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:66:33
+   |
+66 |     kestra_orchestrator: Option<KestraOrchestrator>,
+   |                                 ^^^^^^^^^^^^^^^^^^ not found in this scope
+   |
+help: you might be missing a type parameter
+   |
+49 | struct EnhancedTradingSystem<KestraOrchestrator> {
+   |                             ++++++++++++++++++++
+
+error[E0412]: cannot find type `DiscordAlert` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:69:27
+   |
+69 |     discord_alert: Option<DiscordAlert>,
+   |                           ^^^^^^^^^^^^ not found in this scope
+   |
+help: consider importing this struct
+   |
+5  + use solana_arbitrage_bot::DiscordAlert;
+   |
+
+error[E0412]: cannot find type `WebServer` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:70:24
+   |
+70 |     web_server: Option<WebServer>,
+   |                        ^^^^^^^^^ not found in this scope
+   |
+help: consider importing this struct
+   |
+5  + use solana_arbitrage_bot::WebServer;
+   |
+
+error[E0412]: cannot find type `Arc` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:73:21
+   |
+73 |     system_metrics: Arc<RwLock<SystemMetrics>>,
+   |                     ^^^ not found in this scope
+   |
+help: consider importing this struct
+   |
+5  + use std::sync::Arc;
+   |
+
+error[E0412]: cannot find type `RwLock` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:73:25
+   |
+73 |     system_metrics: Arc<RwLock<SystemMetrics>>,
+   |                         ^^^^^^ not found in this scope
+   |
+help: consider importing one of these structs
+   |
+5  + use std::sync::RwLock;
+   |
+5  + use tokio::sync::RwLock;
+   |
+
+error[E0412]: cannot find type `Decimal` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:81:33
+   |
+81 |     pub arbitrage_profit_today: Decimal,
+   |                                 ^^^^^^^ not found in this scope
+   |
+help: consider importing this struct
+   |
+5  + use rust_decimal::Decimal;
+   |
+
+error[E0412]: cannot find type `Decimal` in this scope
+  --> src/bin/enhanced_arbitrage_bot.rs:86:30
+   |
+86 |     pub sniper_profit_today: Decimal,
+   |                              ^^^^^^^ not found in this scope
+   |
+help: consider importing this struct
+   |
+5  + use rust_decimal::Decimal;
+   |
+
+error[E0412]: cannot find type `Decimal` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:100:29
+    |
+100 |     pub total_profit_today: Decimal,
+    |                             ^^^^^^^ not found in this scope
+    |
+help: consider importing this struct
+    |
+5   + use rust_decimal::Decimal;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Arc`
+   --> src/bin/enhanced_arbitrage_bot.rs:112:26
+    |
+112 |         let rpc_client = Arc::new(RpcClient::new(config.core.rpc.url.clone()));
+    |                          ^^^ use of undeclared type `Arc`
+    |
+help: consider importing this struct
+    |
+5   + use std::sync::Arc;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `RpcClient`
+   --> src/bin/enhanced_arbitrage_bot.rs:112:35
+    |
+112 |         let rpc_client = Arc::new(RpcClient::new(config.core.rpc.url.clone()));
+    |                                   ^^^^^^^^^ use of undeclared type `RpcClient`
+    |
+help: consider importing one of these structs
+    |
+5   + use solana_client::nonblocking::rpc_client::RpcClient;
+    |
+5   + use solana_client::rpc_client::RpcClient;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Arc`
+   --> src/bin/enhanced_arbitrage_bot.rs:115:23
+    |
+115 |         let keypair = Arc::new(
+    |                       ^^^ use of undeclared type `Arc`
+    |
+help: consider importing this struct
+    |
+5   + use std::sync::Arc;
+    |
+
+error[E0422]: cannot find struct, variant or union type `SharedState` in this scope
+   --> src/bin/enhanced_arbitrage_bot.rs:121:28
+    |
+121 |         let shared_state = SharedState {
+    |                            ^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this struct
+    |
+5   + use solana_arbitrage_bot::SharedState;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Arc`
+   --> src/bin/enhanced_arbitrage_bot.rs:122:28
+    |
+122 |             raydium_price: Arc::new(Mutex::new(None)),
+    |                            ^^^ use of undeclared type `Arc`
+    |
+help: consider importing this struct
+    |
+5   + use std::sync::Arc;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Mutex`
+   --> src/bin/enhanced_arbitrage_bot.rs:122:37
+    |
+122 |             raydium_price: Arc::new(Mutex::new(None)),
+    |                                     ^^^^^ use of undeclared type `Mutex`
+    |
+help: consider importing one of these structs
+    |
+5   + use std::sync::Mutex;
+    |
+5   + use futures::lock::Mutex;
+    |
+5   + use futures_util::lock::Mutex;
+    |
+5   + use tokio::sync::Mutex;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Arc`
+   --> src/bin/enhanced_arbitrage_bot.rs:123:25
+    |
+123 |             orca_price: Arc::new(Mutex::new(None)),
+    |                         ^^^ use of undeclared type `Arc`
+    |
+help: consider importing this struct
+    |
+5   + use std::sync::Arc;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Mutex`
+   --> src/bin/enhanced_arbitrage_bot.rs:123:34
+    |
+123 |             orca_price: Arc::new(Mutex::new(None)),
+    |                                  ^^^^^ use of undeclared type `Mutex`
+    |
+help: consider importing one of these structs
+    |
+5   + use std::sync::Mutex;
+    |
+5   + use futures::lock::Mutex;
+    |
+5   + use futures_util::lock::Mutex;
+    |
+5   + use tokio::sync::Mutex;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Arc`
+   --> src/bin/enhanced_arbitrage_bot.rs:124:27
+    |
+124 |             trades_today: Arc::new(Mutex::new(0)),
+    |                           ^^^ use of undeclared type `Arc`
+    |
+help: consider importing this struct
+    |
+5   + use std::sync::Arc;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Mutex`
+   --> src/bin/enhanced_arbitrage_bot.rs:124:36
+    |
+124 |             trades_today: Arc::new(Mutex::new(0)),
+    |                                    ^^^^^ use of undeclared type `Mutex`
+    |
+help: consider importing one of these structs
+    |
+5   + use std::sync::Mutex;
+    |
+5   + use futures::lock::Mutex;
+    |
+5   + use futures_util::lock::Mutex;
+    |
+5   + use tokio::sync::Mutex;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Arc`
+   --> src/bin/enhanced_arbitrage_bot.rs:125:27
+    |
+125 |             profit_today: Arc::new(Mutex::new(Decimal::ZERO)),
+    |                           ^^^ use of undeclared type `Arc`
+    |
+help: consider importing this struct
+    |
+5   + use std::sync::Arc;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Mutex`
+   --> src/bin/enhanced_arbitrage_bot.rs:125:36
+    |
+125 |             profit_today: Arc::new(Mutex::new(Decimal::ZERO)),
+    |                                    ^^^^^ use of undeclared type `Mutex`
+    |
+help: consider importing one of these structs
+    |
+5   + use std::sync::Mutex;
+    |
+5   + use futures::lock::Mutex;
+    |
+5   + use futures_util::lock::Mutex;
+    |
+5   + use tokio::sync::Mutex;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Decimal`
+   --> src/bin/enhanced_arbitrage_bot.rs:125:47
+    |
+125 |             profit_today: Arc::new(Mutex::new(Decimal::ZERO)),
+    |                                               ^^^^^^^ use of undeclared type `Decimal`
+    |
+help: consider importing this struct
+    |
+5   + use rust_decimal::Decimal;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Arc`
+   --> src/bin/enhanced_arbitrage_bot.rs:142:29
+    |
+142 |             system_metrics: Arc::new(RwLock::new(SystemMetrics::default())),
+    |                             ^^^ use of undeclared type `Arc`
+    |
+help: consider importing this struct
+    |
+5   + use std::sync::Arc;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `RwLock`
+   --> src/bin/enhanced_arbitrage_bot.rs:142:38
+    |
+142 |             system_metrics: Arc::new(RwLock::new(SystemMetrics::default())),
+    |                                      ^^^^^^ use of undeclared type `RwLock`
+    |
+help: consider importing one of these structs
+    |
+5   + use std::sync::RwLock;
+    |
+5   + use tokio::sync::RwLock;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `DexMonitor`
+   --> src/bin/enhanced_arbitrage_bot.rs:193:33
+    |
+193 |         self.dex_monitor = Some(DexMonitor::new(
+    |                                 ^^^^^^^^^^ use of undeclared type `DexMonitor`
+    |
+help: consider importing this struct
+    |
+5   + use solana_arbitrage_bot::DexMonitor;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `ProfitCalculator`
+   --> src/bin/enhanced_arbitrage_bot.rs:199:39
+    |
+199 |         self.profit_calculator = Some(ProfitCalculator::new(&self.config.core));
+    |                                       ^^^^^^^^^^^^^^^^ use of undeclared type `ProfitCalculator`
+    |
+help: consider importing this struct
+    |
+5   + use solana_arbitrage_bot::ProfitCalculator;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `TransactionExecutor`
+   --> src/bin/enhanced_arbitrage_bot.rs:202:42
+    |
+202 |         self.transaction_executor = Some(TransactionExecutor::new(
+    |                                          ^^^^^^^^^^^^^^^^^^^ use of undeclared type `TransactionExecutor`
+    |
+help: consider importing one of these structs
+    |
+5   + use solana_arbitrage_bot::TransactionExecutor;
+    |
+5   + use solana_client::transaction_executor::TransactionExecutor;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `SafetyGuard`
+   --> src/bin/enhanced_arbitrage_bot.rs:209:34
+    |
+209 |         self.safety_guard = Some(SafetyGuard::new(self.config.core.limits.clone()));
+    |                                  ^^^^^^^^^^^ use of undeclared type `SafetyGuard`
+    |
+help: consider importing this struct
+    |
+5   + use solana_arbitrage_bot::SafetyGuard;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `DiscordAlert`
+   --> src/bin/enhanced_arbitrage_bot.rs:249:39
+    |
+249 |             self.discord_alert = Some(DiscordAlert::new(discord_config.clone()));
+    |                                       ^^^^^^^^^^^^ use of undeclared type `DiscordAlert`
+    |
+help: consider importing this struct
+    |
+5   + use solana_arbitrage_bot::DiscordAlert;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `WebServer`
+   --> src/bin/enhanced_arbitrage_bot.rs:258:36
+    |
+258 |             self.web_server = Some(WebServer::new(
+    |                                    ^^^^^^^^^ use of undeclared type `WebServer`
+    |
+help: consider importing this struct
+    |
+5   + use solana_arbitrage_bot::WebServer;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Duration`
+   --> src/bin/enhanced_arbitrage_bot.rs:342:40
+    |
+342 |                     tokio::time::sleep(Duration::from_millis(100)).await;
+    |                                        ^^^^^^^^ use of undeclared type `Duration`
+    |
+help: consider importing one of these items
+    |
+5   + use std::time::Duration;
+    |
+5   + use chrono::Duration;
+    |
+5   + use tokio::time::Duration;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Duration`
+   --> src/bin/enhanced_arbitrage_bot.rs:357:58
+    |
+357 |                 let mut interval = tokio::time::interval(Duration::from_secs(7 * 24 * 3600));
+    |                                                          ^^^^^^^^ use of undeclared type `Duration`
+    |
+help: consider importing one of these items
+    |
+5   + use std::time::Duration;
+    |
+5   + use chrono::Duration;
+    |
+5   + use tokio::time::Duration;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Duration`
+   --> src/bin/enhanced_arbitrage_bot.rs:380:54
+    |
+380 |             let mut interval = tokio::time::interval(Duration::from_secs(60));
+    |                                                      ^^^^^^^^ use of undeclared type `Duration`
+    |
+help: consider importing one of these items
+    |
+5   + use std::time::Duration;
+    |
+5   + use chrono::Duration;
+    |
+5   + use tokio::time::Duration;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Decimal`
+   --> src/bin/enhanced_arbitrage_bot.rs:406:37
+    |
+406 |             arbitrage_profit_today: Decimal::ZERO,
+    |                                     ^^^^^^^ use of undeclared type `Decimal`
+    |
+help: consider importing this struct
+    |
+5   + use rust_decimal::Decimal;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Decimal`
+   --> src/bin/enhanced_arbitrage_bot.rs:409:34
+    |
+409 |             sniper_profit_today: Decimal::ZERO,
+    |                                  ^^^^^^^ use of undeclared type `Decimal`
+    |
+help: consider importing this struct
+    |
+5   + use rust_decimal::Decimal;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Decimal`
+   --> src/bin/enhanced_arbitrage_bot.rs:417:33
+    |
+417 |             total_profit_today: Decimal::ZERO,
+    |                                 ^^^^^^^ use of undeclared type `Decimal`
+    |
+help: consider importing this struct
+    |
+5   + use rust_decimal::Decimal;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Duration`
+   --> src/bin/enhanced_arbitrage_bot.rs:447:28
+    |
+447 |         tokio::time::sleep(Duration::from_secs(60)).await;
+    |                            ^^^^^^^^ use of undeclared type `Duration`
+    |
+help: consider importing one of these items
+    |
+5   + use std::time::Duration;
+    |
+5   + use chrono::Duration;
+    |
+5   + use tokio::time::Duration;
+    |
+
+warning: `solana-arbitrage-bot` (bin "simple_detector_test") generated 3 warnings (run `cargo clippy --fix --bin "simple_detector_test"` to apply 2 suggestions)
+warning: field assignment outside of initializer for an instance created with Default::default()
+  --> tests/safety_checker_tests.rs:40:5
+   |
+40 |     config.min_liquidity_sol = 2.0;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+note: consider initializing the variable with `solana_arbitrage_bot::sniper::SafetyConfig { min_liquidity_sol: 2.0, max_buy_tax_percent: 3.0, ..Default::default() }` and removing relevant reassignments
+  --> tests/safety_checker_tests.rs:39:5
+   |
+39 |     let mut config = SafetyConfig::default();
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+   = note: `-W clippy::field-reassign-with-default` implied by `-W clippy::all`
+   = help: to override `-W clippy::all` add `#[allow(clippy::field_reassign_with_default)]`
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+  --> tests/safety_checker_tests.rs:69:5
+   |
+69 |     config.min_liquidity_sol = 5.0; // 5 SOL minimum
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+note: consider initializing the variable with `solana_arbitrage_bot::sniper::SafetyConfig { min_liquidity_sol: 5.0, ..Default::default() }` and removing relevant reassignments
+  --> tests/safety_checker_tests.rs:68:5
+   |
+68 |     let mut config = SafetyConfig::default();
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+
+error[E0107]: enum takes 2 generic arguments but 1 generic argument was supplied
+   --> src/bin/enhanced_arbitrage_bot.rs:426:20
+    |
+426 | async fn main() -> Result<()> {
+    |                    ^^^^^^ -- supplied 1 generic argument
+    |                    |
+    |                    expected 2 generic arguments
+    |
+note: enum defined here, with 2 generic parameters: `T`, `E`
+   --> /home/marcin/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:548:10
+    |
+548 | pub enum Result<T, E> {
+    |          ^^^^^^ -  -
+help: add missing generic argument
+    |
+426 | async fn main() -> Result<(), E> {
+    |                             +++
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> tests/safety_checker_tests.rs:116:5
+    |
+116 |     config.blacklist_keywords = vec!["test".to_string(), "scam".to_string()];
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `solana_arbitrage_bot::sniper::SafetyConfig { blacklist_keywords: vec!["test".to_string(), "scam".to_string()], ..Default::default() }` and removing relevant reassignments
+   --> tests/safety_checker_tests.rs:115:5
+    |
+115 |     let mut config = SafetyConfig::default();
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+
+error[E0107]: enum takes 2 generic arguments but 1 generic argument was supplied
+   --> src/bin/enhanced_arbitrage_bot.rs:108:48
+    |
+108 |     async fn new(config: EnhancedBotConfig) -> Result<Self> {
+    |                                                ^^^^^^ ---- supplied 1 generic argument
+    |                                                |
+    |                                                expected 2 generic arguments
+    |
+note: enum defined here, with 2 generic parameters: `T`, `E`
+   --> /home/marcin/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:548:10
+    |
+548 | pub enum Result<T, E> {
+    |          ^^^^^^ -  -
+help: add missing generic argument
+    |
+108 |     async fn new(config: EnhancedBotConfig) -> Result<Self, E> {
+    |                                                           +++
+
+error[E0107]: enum takes 2 generic arguments but 1 generic argument was supplied
+   --> src/bin/enhanced_arbitrage_bot.rs:152:50
+    |
+152 |     async fn initialize_components(&mut self) -> Result<()> {
+    |                                                  ^^^^^^ -- supplied 1 generic argument
+    |                                                  |
+    |                                                  expected 2 generic arguments
+    |
+note: enum defined here, with 2 generic parameters: `T`, `E`
+   --> /home/marcin/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:548:10
+    |
+548 | pub enum Result<T, E> {
+    |          ^^^^^^ -  -
+help: add missing generic argument
+    |
+152 |     async fn initialize_components(&mut self) -> Result<(), E> {
+    |                                                           +++
+
+error[E0107]: enum takes 2 generic arguments but 1 generic argument was supplied
+   --> src/bin/enhanced_arbitrage_bot.rs:189:60
+    |
+189 |     async fn initialize_arbitrage_components(&mut self) -> Result<()> {
+    |                                                            ^^^^^^ -- supplied 1 generic argument
+    |                                                            |
+    |                                                            expected 2 generic arguments
+    |
+note: enum defined here, with 2 generic parameters: `T`, `E`
+   --> /home/marcin/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:548:10
+    |
+548 | pub enum Result<T, E> {
+    |          ^^^^^^ -  -
+help: add missing generic argument
+    |
+189 |     async fn initialize_arbitrage_components(&mut self) -> Result<(), E> {
+    |                                                                     +++
+
+error[E0107]: enum takes 2 generic arguments but 1 generic argument was supplied
+   --> src/bin/enhanced_arbitrage_bot.rs:215:57
+    |
+215 |     async fn initialize_sniper_components(&mut self) -> Result<()> {
+    |                                                         ^^^^^^ -- supplied 1 generic argument
+    |                                                         |
+    |                                                         expected 2 generic arguments
+    |
+note: enum defined here, with 2 generic parameters: `T`, `E`
+   --> /home/marcin/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:548:10
+    |
+548 | pub enum Result<T, E> {
+    |          ^^^^^^ -  -
+help: add missing generic argument
+    |
+215 |     async fn initialize_sniper_components(&mut self) -> Result<(), E> {
+    |                                                                  +++
+
+error[E0107]: enum takes 2 generic arguments but 1 generic argument was supplied
+   --> src/bin/enhanced_arbitrage_bot.rs:228:55
+    |
+228 |     async fn initialize_gepa_components(&mut self) -> Result<()> {
+    |                                                       ^^^^^^ -- supplied 1 generic argument
+    |                                                       |
+    |                                                       expected 2 generic arguments
+    |
+note: enum defined here, with 2 generic parameters: `T`, `E`
+   --> /home/marcin/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:548:10
+    |
+548 | pub enum Result<T, E> {
+    |          ^^^^^^ -  -
+help: add missing generic argument
+    |
+228 |     async fn initialize_gepa_components(&mut self) -> Result<(), E> {
+    |                                                                +++
+
+error[E0107]: enum takes 2 generic arguments but 1 generic argument was supplied
+   --> src/bin/enhanced_arbitrage_bot.rs:237:57
+    |
+237 |     async fn initialize_kestra_components(&mut self) -> Result<()> {
+    |                                                         ^^^^^^ -- supplied 1 generic argument
+    |                                                         |
+    |                                                         expected 2 generic arguments
+    |
+note: enum defined here, with 2 generic parameters: `T`, `E`
+   --> /home/marcin/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:548:10
+    |
+548 | pub enum Result<T, E> {
+    |          ^^^^^^ -  -
+help: add missing generic argument
+    |
+237 |     async fn initialize_kestra_components(&mut self) -> Result<(), E> {
+    |                                                                  +++
+
+error[E0107]: enum takes 2 generic arguments but 1 generic argument was supplied
+   --> src/bin/enhanced_arbitrage_bot.rs:246:54
+    |
+246 |     async fn initialize_discord_alerts(&mut self) -> Result<()> {
+    |                                                      ^^^^^^ -- supplied 1 generic argument
+    |                                                      |
+    |                                                      expected 2 generic arguments
+    |
+note: enum defined here, with 2 generic parameters: `T`, `E`
+   --> /home/marcin/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:548:10
+    |
+548 | pub enum Result<T, E> {
+    |          ^^^^^^ -  -
+help: add missing generic argument
+    |
+246 |     async fn initialize_discord_alerts(&mut self) -> Result<(), E> {
+    |                                                               +++
+
+error[E0107]: enum takes 2 generic arguments but 1 generic argument was supplied
+   --> src/bin/enhanced_arbitrage_bot.rs:255:53
+    |
+255 |     async fn initialize_web_dashboard(&mut self) -> Result<()> {
+    |                                                     ^^^^^^ -- supplied 1 generic argument
+    |                                                     |
+    |                                                     expected 2 generic arguments
+    |
+note: enum defined here, with 2 generic parameters: `T`, `E`
+   --> /home/marcin/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:548:10
+    |
+548 | pub enum Result<T, E> {
+    |          ^^^^^^ -  -
+help: add missing generic argument
+    |
+255 |     async fn initialize_web_dashboard(&mut self) -> Result<(), E> {
+    |                                                              +++
+
+error[E0107]: enum takes 2 generic arguments but 1 generic argument was supplied
+   --> src/bin/enhanced_arbitrage_bot.rs:267:30
+    |
+267 |     async fn start(&self) -> Result<()> {
+    |                              ^^^^^^ -- supplied 1 generic argument
+    |                              |
+    |                              expected 2 generic arguments
+    |
+note: enum defined here, with 2 generic parameters: `T`, `E`
+   --> /home/marcin/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:548:10
+    |
+548 | pub enum Result<T, E> {
+    |          ^^^^^^ -  -
+help: add missing generic argument
+    |
+267 |     async fn start(&self) -> Result<(), E> {
+    |                                       +++
+
+error[E0107]: enum takes 2 generic arguments but 1 generic argument was supplied
+   --> src/bin/enhanced_arbitrage_bot.rs:322:48
+    |
+322 |     async fn start_arbitrage_trading(&self) -> Result<()> {
+    |                                                ^^^^^^ -- supplied 1 generic argument
+    |                                                |
+    |                                                expected 2 generic arguments
+    |
+note: enum defined here, with 2 generic parameters: `T`, `E`
+   --> /home/marcin/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:548:10
+    |
+548 | pub enum Result<T, E> {
+    |          ^^^^^^ -  -
+help: add missing generic argument
+    |
+322 |     async fn start_arbitrage_trading(&self) -> Result<(), E> {
+    |                                                         +++
+
+error[E0107]: enum takes 2 generic arguments but 1 generic argument was supplied
+   --> src/bin/enhanced_arbitrage_bot.rs:351:48
+    |
+351 |     async fn start_gepa_optimization(&self) -> Result<()> {
+    |                                                ^^^^^^ -- supplied 1 generic argument
+    |                                                |
+    |                                                expected 2 generic arguments
+    |
+note: enum defined here, with 2 generic parameters: `T`, `E`
+   --> /home/marcin/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:548:10
+    |
+548 | pub enum Result<T, E> {
+    |          ^^^^^^ -  -
+help: add missing generic argument
+    |
+351 |     async fn start_gepa_optimization(&self) -> Result<(), E> {
+    |                                                         +++
+
+error[E0107]: enum takes 2 generic arguments but 1 generic argument was supplied
+   --> src/bin/enhanced_arbitrage_bot.rs:376:49
+    |
+376 |     async fn start_metrics_collection(&self) -> Result<()> {
+    |                                                 ^^^^^^ -- supplied 1 generic argument
+    |                                                 |
+    |                                                 expected 2 generic arguments
+    |
+note: enum defined here, with 2 generic parameters: `T`, `E`
+   --> /home/marcin/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:548:10
+    |
+548 | pub enum Result<T, E> {
+    |          ^^^^^^ -  -
+help: add missing generic argument
+    |
+376 |     async fn start_metrics_collection(&self) -> Result<(), E> {
+    |                                                          +++
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> tests/safety_checker_tests.rs:170:5
+    |
+170 |     config.blacklisted_creators = vec![blacklisted_creator.to_string()];
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `solana_arbitrage_bot::sniper::SafetyConfig { blacklisted_creators: vec![blacklisted_creator.to_string()], blacklist_keywords: vec![], ..Default::default() }` and removing relevant reassignments
+   --> tests/safety_checker_tests.rs:169:5
+    |
+169 |     let mut config = SafetyConfig::default();
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> tests/safety_checker_tests.rs:196:5
+    |
+196 |     config.enable_safety_checks = false;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `solana_arbitrage_bot::sniper::SafetyConfig { enable_safety_checks: false, min_liquidity_sol: 100.0, blacklist_keywords: vec!["test".to_string()], ..Default::default() }` and removing relevant reassignments
+   --> tests/safety_checker_tests.rs:195:5
+    |
+195 |     let mut config = SafetyConfig::default();
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> tests/safety_checker_tests.rs:220:5
+    |
+220 |     config.honeypot_api = Some("https://custom-honeypot-api.com/check".to_string());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `solana_arbitrage_bot::sniper::SafetyConfig { honeypot_api: Some("https://custom-honeypot-api.com/check".to_string()), rugcheck_api: Some("https://custom-rugcheck-api.com/tokens".to_string()), ..Default::default() }` and removing relevant reassignments
+   --> tests/safety_checker_tests.rs:219:5
+    |
+219 |     let mut config = SafetyConfig::default();
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> tests/safety_checker_tests.rs:294:5
+    |
+294 |     config.max_market_cap_usd = 50_000.0; // $50k max
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `solana_arbitrage_bot::sniper::SafetyConfig { max_market_cap_usd: 50_000.0, enable_safety_checks: true, ..Default::default() }` and removing relevant reassignments
+   --> tests/safety_checker_tests.rs:293:5
+    |
+293 |     let mut config = SafetyConfig::default();
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> tests/safety_checker_tests.rs:331:5
+    |
+331 |     config.min_holders = 50; // Require at least 50 holders
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `solana_arbitrage_bot::sniper::SafetyConfig { min_holders: 50, max_market_cap_usd: 0.0, enable_safety_checks: true, ..Default::default() }` and removing relevant reassignments
+   --> tests/safety_checker_tests.rs:330:5
+    |
+330 |     let mut config = SafetyConfig::default();
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+
+error[E0433]: failed to resolve: use of undeclared type `EnhancedSniperBot`
+   --> src/bin/enhanced_arbitrage_bot.rs:218:32
+    |
+218 |         self.sniper_bot = Some(EnhancedSniperBot::new(
+    |                                ^^^^^^^^^^^^^^^^^ use of undeclared type `EnhancedSniperBot`
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> tests/safety_checker_tests.rs:362:5
+    |
+362 |     config.max_dev_percentage = 20.0; // Max 20% dev concentration
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `solana_arbitrage_bot::sniper::SafetyConfig { max_dev_percentage: 20.0, max_market_cap_usd: 0.0, min_holders: 0, enable_safety_checks: true, ..Default::default() }` and removing relevant reassignments
+   --> tests/safety_checker_tests.rs:361:5
+    |
+361 |     let mut config = SafetyConfig::default();
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+
+error[E0433]: failed to resolve: use of undeclared type `GepaOptimizer`
+   --> src/bin/enhanced_arbitrage_bot.rs:231:36
+    |
+231 |         self.gepa_optimizer = Some(GepaOptimizer::new(self.config.gepa.clone()));
+    |                                    ^^^^^^^^^^^^^ use of undeclared type `GepaOptimizer`
+
+error[E0433]: failed to resolve: use of undeclared type `KestraOrchestrator`
+   --> src/bin/enhanced_arbitrage_bot.rs:240:41
+    |
+240 |         self.kestra_orchestrator = Some(KestraOrchestrator::new(self.config.kestra.clone())?);
+    |                                         ^^^^^^^^^^^^^^^^^^ use of undeclared type `KestraOrchestrator`
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> tests/safety_checker_tests.rs:396:5
+    |
+396 |     config.max_token_age_minutes = 30; // Max 30 minutes old
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `solana_arbitrage_bot::sniper::SafetyConfig { max_token_age_minutes: 30, max_market_cap_usd: 0.0, min_holders: 0, max_dev_percentage: 0.0, enable_safety_checks: true, ..Default::default() }` and removing relevant reassignments
+   --> tests/safety_checker_tests.rs:395:5
+    |
+395 |     let mut config = SafetyConfig::default();
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> tests/safety_checker_tests.rs:428:5
+    |
+428 |     config.max_market_cap_usd = 0.0; // Disable market cap check
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `solana_arbitrage_bot::sniper::SafetyConfig { max_market_cap_usd: 0.0, min_holders: 0, max_dev_percentage: 0.0, max_token_age_minutes: 0, enable_safety_checks: true, ..Default::default() }` and removing relevant reassignments
+   --> tests/safety_checker_tests.rs:427:5
+    |
+427 |     let mut config = SafetyConfig::default();
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> tests/safety_checker_tests.rs:457:5
+    |
+457 |     config.min_liquidity_sol = 100.0; // Bardzo wysoki próg
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `solana_arbitrage_bot::sniper::SafetyConfig { min_liquidity_sol: 100.0, enable_safety_checks: true, ..Default::default() }` and removing relevant reassignments
+   --> tests/safety_checker_tests.rs:456:5
+    |
+456 |     let mut config = SafetyConfig::default();
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> tests/safety_checker_tests.rs:497:5
+    |
+497 |     config.min_liquidity_sol = 2.0;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `solana_arbitrage_bot::sniper::SafetyConfig { min_liquidity_sol: 2.0, max_buy_tax_percent: 3.0, blacklisted_creators: vec!["11111111111111111111111111111111".to_string()], ..Default::default() }` and removing relevant reassignments
+   --> tests/safety_checker_tests.rs:496:5
+    |
+496 |     let mut config = SafetyConfig::default();
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+
+warning: `solana-arbitrage-bot` (test "safety_checker_tests") generated 13 warnings
+Some errors have detailed explanations: E0107, E0412, E0422, E0433.
+For more information about an error, try `rustc --explain E0107`.
+error: could not compile `solana-arbitrage-bot` (bin "enhanced_arbitrage_bot" test) due to 86 previous errors
+warning: build failed, waiting for other jobs to finish...
+warning: fields `timestamp`, `amount_sol`, `raydium_price`, and `orca_price` are never read
+  --> src/bin/gepa_optimizer.rs:30:5
+   |
+29 | struct RowCsv {
+   |        ------ fields in this struct
+30 |     timestamp: String,
+   |     ^^^^^^^^^
+31 |     profit_usd: f64,
+32 |     amount_sol: f64,
+   |     ^^^^^^^^^^
+33 |     spread_percent: f64,
+34 |     raydium_price: f64,
+   |     ^^^^^^^^^^^^^
+35 |     orca_price: f64,
+   |     ^^^^^^^^^^
+   |
+   = note: `RowCsv` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` on by default
+
+warning: `solana-arbitrage-bot` (bin "gepa_optimizer" test) generated 1 warning

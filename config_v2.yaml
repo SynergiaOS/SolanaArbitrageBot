@@ -1,0 +1,129 @@
+# Solana Arbitrage Bot - Enhanced Configuration v2.0
+# Complete configuration with all safety features
+
+# Network Configuration
+network:
+  rpc_url: "https://api.mainnet-beta.solana.com"
+  ws_url: "wss://api.mainnet-beta.solana.com"
+  network_type: "Mainnet"  # Mainnet, Devnet, Testnet
+  commitment_level: "confirmed"
+  max_retries: 3
+  timeout_seconds: 30
+
+# Wallet Configuration
+wallet:
+  wallet_path: "~/.solana-bot/wallet.json"
+  use_ledger: false
+  ledger_derivation_path: "m/44'/501'/0'/0'"
+  max_auto_approve_usd: 100.0  # Max USD for auto-approval on Ledger
+
+# DEX Configuration
+dex:
+  raydium:
+    program_id: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"
+    pool_address: "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2"  # SOL/USDC
+    fee_percent: 0.25
+  orca:
+    program_id: "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"
+    pool_address: "7qbRF6YsyGuLUVs6Y1q64bdVrfe4ZcUUz1JRdoVNUJnm"  # SOL/USDC
+    fee_percent: 0.30
+  jupiter:
+    api_url: "https://quote-api.jup.ag/v6"
+    max_slippage_bps: 50  # 0.5%
+    use_versioned_tx: true
+
+# Trading Configuration
+trading:
+  max_position_sol: 10.0
+  min_profit_usd: 1.0
+  min_profit_percent: 0.3
+  max_slippage_percent: 0.5
+  max_daily_trades: 30
+  max_daily_loss_usd: 100.0
+  priority_fee_lamports: 10000
+  simulation_required: true
+
+# Safety Configuration
+safety:
+  enable_safety_checks: true
+  min_liquidity_sol: 5.0  # Minimum pool liquidity
+  max_market_cap_usd: 1000000.0  # Max market cap for new tokens
+  min_holders: 100  # Minimum number of holders
+  max_dev_percentage: 10.0  # Max % held by single wallet
+  max_token_age_minutes: 60  # Max age for sniper bot
+  max_buy_tax_percent: 5.0
+  max_sell_tax_percent: 5.0
+  blacklisted_creators:
+    - "ScamCreator11111111111111111111111111111111"
+  blacklist_keywords:
+    - "scam"
+    - "rug"
+    - "honeypot"
+    - "fake"
+  circuit_breaker:
+    failure_threshold: 5  # Failures before opening
+    success_threshold: 3  # Successes to close
+    timeout_seconds: 300  # Time before half-open
+    cooldown_minutes: 60  # Cooldown after trigger
+
+# Monitoring Configuration
+monitoring:
+  enable_monitoring: true
+  price_update_interval_ms: 100  # 10Hz updates
+  cache_duration_ms: 50  # Price cache duration
+  enable_post_trade_monitoring: true
+  rug_pull_detection:
+    enable: true
+    lp_drain_threshold_percent: 20.0  # Alert if LP drops 20%
+    check_interval_seconds: 30
+    emergency_sell_enabled: true
+
+# Notification Configuration
+notifications:
+  discord:
+    enabled: true
+    webhook_url: "${DISCORD_WEBHOOK_URL}"  # Set via environment
+    alert_on_profit: true
+    alert_on_loss: true
+    alert_on_error: true
+    min_profit_alert_usd: 10.0
+  telegram:
+    enabled: false
+    bot_token: "${TELEGRAM_BOT_TOKEN}"
+    chat_id: "${TELEGRAM_CHAT_ID}"
+  email:
+    enabled: false
+    smtp_server: "smtp.gmail.com:587"
+    from_address: "bot@example.com"
+    to_addresses:
+      - "trader@example.com"
+
+# Performance Configuration
+performance:
+  enable_optimizations: true
+  parallel_requests: 4  # Concurrent API requests
+  cache_size_mb: 100  # Memory cache size
+  max_memory_mb: 512  # Max memory usage
+
+# Advanced Features (Optional)
+advanced:
+  enable_mev_protection: true
+  use_private_mempool: false
+  enable_flash_loans: false
+  max_flash_loan_sol: 100.0
+  enable_sandwich_detection: true
+  enable_frontrun_protection: true
+
+# Logging Configuration
+logging:
+  level: "info"  # debug, info, warn, error
+  file: "logs/bot.log"
+  max_file_size_mb: 100
+  max_files: 10
+  console_output: true
+
+# API Keys (Set via environment variables for security)
+api_keys:
+  helius: "${HELIUS_API_KEY}"
+  birdeye: "${BIRDEYE_API_KEY}"
+  jupiter: "${JUPITER_API_KEY}"

@@ -203,6 +203,36 @@ pub struct MarketAnalysis {
     pub anomalies: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HolderAnalysis {
+    pub total_holders: usize,
+    pub top_holders_percentage: f64,
+    pub whale_count: usize,
+    pub distribution_score: f64,
+    pub risk_level: RiskLevel,
+}
+
+/// Risk levels for various analyses
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum RiskLevel {
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+impl HolderAnalysis {
+    pub fn new() -> Self {
+        Self {
+            total_holders: 0,
+            top_holders_percentage: 0.0,
+            whale_count: 0,
+            distribution_score: 0.0,
+            risk_level: RiskLevel::Low,
+        }
+    }
+}
+
 /// Advanced rug pull detector
 pub struct RugDetector {
     config: RugDetectorConfig,
@@ -420,37 +450,58 @@ impl RugDetector {
     
     /// Analyze token distribution for suspicious patterns
     async fn analyze_token_distribution(&self, distribution: &TokenDistribution) -> DistributionAnalysis {
-        let mut score = 0.0;
+        let mut score: f64 = 0.0;
         let mut suspicious_patterns = Vec::new();
         
-        // Check holder count
-        if distribution.holder_count < self.config.min_holder_count {
-            score += 0.3;
-            suspicious_patterns.push(format!("Low holder count: {}", distribution.holder_count));
-        }
+        let holder_count = distribution.len() as u32;
         
-        // Check top 10 concentration
-        if distribution.top_10_concentration > self.config.max_top10_concentration {
+        // Check holder distribution
+        let top_10_percent = distribution.len() / 10;
+        let top10_concentration = if top_10_percent > 0 {
+            distribution.iter()
+                .take(top_10_percent)
+                .map(|h| h.balance_percentage)
+                .sum()
+        } else {
+            0.0
+        };
+        
+        if top10_concentration > 80.0 {
             score += 0.4;
-            suspicious_patterns.push(format!("High top 10 concentration: {:.1}%", 
-                                            distribution.top_10_concentration * 100.0));
+            suspicious_patterns.push("High concentration in top 10 holders".to_string());
         }
         
-        // Check team allocation
-        if distribution.team_allocation > self.config.max_team_allocation {
+        // Check for whale dominance
+        let largest_holder_percent = distribution.first()
+            .map(|h| h.balance_percentage)
+            .unwrap_or(0.0);
+        
+        if largest_holder_percent > 50.0 {
+            score += 0.5;
+            suspicious_patterns.push("Single holder owns majority of tokens".to_string());
+        }
+        
+        // Check number of holders
+        if holder_count < 50 {
+            score += 0.2;
+            suspicious_patterns.push("Very low number of holders".to_string());
+        }
+        
+        // Check for suspicious patterns (potential bot accounts)
+        let similar_balances = distribution.iter()
+            .filter(|h| h.balance_percentage > 1.0 && h.balance_percentage < 5.0)
+            .count();
+        
+        if similar_balances > distribution.len() / 4 {
             score += 0.3;
-            suspicious_patterns.push(format!("High team allocation: {:.1}%", 
-                                            distribution.team_allocation * 100.0));
+            suspicious_patterns.push("Many holders with similar balance amounts".to_string());
         }
-        
-        // Add existing suspicious patterns
-        suspicious_patterns.extend(distribution.suspicious_patterns.clone());
         
         DistributionAnalysis {
-            holder_count: distribution.holder_count,
-            top10_concentration: distribution.top_10_concentration,
-            team_allocation: distribution.team_allocation,
-            pool_allocation: distribution.pool_allocation,
+            holder_count,
+            top10_concentration,
+            team_allocation: 0.0, // Would be calculated from known team wallets
+            pool_allocation: 0.0,  // Would be calculated from pool allocation
             distribution_score: score.min(1.0),
             suspicious_patterns,
         }
@@ -527,6 +578,81 @@ impl RugDetector {
         }
     }
     
-    // Additional analysis methods would be implemented here...
-    // analyze_creator_history, analyze_social_presence, analyze_market_behavior
+    /// Analyze creator history for reputation
+    async fn analyze_creator_history(&self, creator: &Pubkey) -> CreatorAnalysis {
+        let history = self.creator_history.read().await.get(creator).cloned();
+    
+        if let Some(hist) = history {
+            CreatorAnalysis {
+                previous_tokens: hist.tokens_created.len() as u32,
+                previous_rugs: hist.rug_pulls.len() as u32,
+                reputation_score: hist.reputation_score,
+                wallet_age_days: SystemTime::now()
+                    .duration_since(hist.first_seen)
+                    .unwrap_or(Duration::from_secs(0))
+                    .as_secs() / (24 * 3600),
+                suspicious_activity: if hist.rug_pulls.len() > 0 {
+                    vec![format!("Previously involved in {} rug pulls", hist.rug_pulls.len())]
+                } else {
+                    vec![]
+                },
+            }
+        } else {
+            // Unknown creator
+            CreatorAnalysis {
+                previous_tokens: 0,
+                previous_rugs: 0,
+                reputation_score: 0.5, // Neutral for unknown
+                wallet_age_days: 0,
+                suspicious_activity: vec!["Unknown creator - no history available".to_string()],
+            }
+        }
+    }
+
+    /// Analyze social media presence
+    async fn analyze_social_presence(&self, metadata: &TokenMetadata) -> SocialAnalysis {
+        let mut score = 0.0;
+        let mut red_flags = Vec::new();
+    
+        // Check if basic social links exist
+        let has_website = metadata.uri.is_some();
+        let has_twitter = false; // Would be extracted from metadata extensions
+        let has_telegram = false; // Would be extracted from metadata extensions  
+        let has_discord = false; // Would be extracted from metadata extensions
+    
+        // Calculate social score based on presence
+        if !has_website {
+            score += 0.2;
+            red_flags.push("No website provided".to_string());
+        }
+    
+        if !has_twitter && !has_telegram && !has_discord {
+            score += 0.3;
+            red_flags.push("No social media presence".to_string());
+        }
+    
+        // Additional checks would go here (checking if links are real, active, etc.)
+    
+        SocialAnalysis {
+            has_website,
+            has_twitter,
+            has_telegram,
+            has_discord,
+            social_score: score.min(1.0),
+            red_flags,
+        }
+    }
+
+    /// Analyze market behavior patterns
+    async fn analyze_market_behavior(&self, launch: &EnhancedTokenLaunch) -> MarketAnalysis {
+        // This would analyze price movements, volume patterns, etc.
+        // For now, returning neutral analysis
+        MarketAnalysis {
+            price_volatility: 0.5,
+            volume_pattern: "Normal".to_string(),
+            whale_activity: 0.3,
+            market_score: 0.2,
+            anomalies: vec![],
+        }
+    }
 }

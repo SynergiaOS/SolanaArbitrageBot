@@ -5,7 +5,7 @@ use axum::{
         ws::{Message, WebSocket, WebSocketUpgrade},
         State,
     },
-    response::{IntoResponse, Response},
+    response::IntoResponse,
 };
 use futures_util::{sink::SinkExt, stream::StreamExt};
 use log::{debug, error, info, warn};

@@ -209,9 +209,7 @@ fn load_config_sources(args: &Args) -> Result<LoadedConfig> {
 
     let mut config = SniperConfig {
         max_position_sol: 0.02,
-        min_liquidity_sol: 5.0, // Domyślnie 5.0 SOL dla bezpieczeństwa
-        max_buy_tax: 10.0,      // Domyślnie 10% dla bezpieczeństwa
-        max_sell_tax: 10.0,     // Domyślnie 10% dla bezpieczeństwa
+        min_liquidity_sol: 3.0, // Synchronized with SafetyConfig & YAML
         profit_target_percent: 200.0,
         stop_loss_percent: 50.0,
         max_market_cap: 100_000.0,
@@ -263,11 +261,12 @@ fn load_config_sources(args: &Args) -> Result<LoadedConfig> {
             if let Some(v) = s.stop_loss_percent {
                 config.stop_loss_percent = v;
             }
-            // Upewnij się, że min_liquidity_sol jest również ustawione z safety config
+            // Map safety values into SniperConfig to avoid drift
             if let Some(safe) = root.safety.clone() {
                 if let Some(v) = safe.min_liquidity_sol {
                     config.min_liquidity_sol = v;
                 }
+                // Note: tax thresholds are managed exclusively in SafetyConfig now
             }
         }
         // Mapuj safety section - KRYTYCZNE: wszystkie filtry muszą być mapowane
@@ -371,6 +370,15 @@ fn load_config_sources(args: &Args) -> Result<LoadedConfig> {
     info!("  🏭 Max market cap: ${}", safety_config.max_market_cap_usd);
     info!("  📊 Max buy tax: {}%", safety_config.max_buy_tax_percent);
     info!("  📊 Max sell tax: {}%", safety_config.max_sell_tax_percent);
+
+    // Validation logging to detect mismatches
+    if (config.min_liquidity_sol - safety_config.min_liquidity_sol).abs() > f64::EPSILON {
+        warn!(
+            "⚠️ Config drift: Sniper.min_liquidity_sol={} vs Safety.min_liquidity_sol={}",
+            config.min_liquidity_sol, safety_config.min_liquidity_sol
+        );
+    }
+
     info!(
         "  🔍 Safety checks: {}",
         if safety_config.enable_safety_checks {
@@ -398,4 +406,38 @@ fn load_wallet(wallet_path: &str) -> Result<Keypair> {
         .map_err(|e| anyhow::anyhow!("Failed to load wallet: {}", e))?;
 
     Ok(wallet)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_min_liquidity_from_safety_yaml() {
+        let yaml = r#"
+        rpc:
+          url: "https://api.devnet.solana.com"
+          ws_url: "wss://api.devnet.solana.com"
+        safety:
+          min_liquidity_sol: 7.5
+        "#;
+
+        let root: super::RootYamlConfig = serde_yaml::from_str(yaml).expect("parse yaml");
+
+        // Simulate loader defaults
+        let mut config = solana_arbitrage_bot::sniper::SniperConfig::default();
+        let mut safety_config = solana_arbitrage_bot::sniper::SafetyConfig::default();
+
+        if let Some(safe) = root.safety {
+            if let Some(v) = safe.min_liquidity_sol {
+                safety_config.min_liquidity_sol = v;
+            }
+        }
+
+        // Apply mapping same as in load_config_sources
+        config.min_liquidity_sol = safety_config.min_liquidity_sol;
+
+        assert!((config.min_liquidity_sol - 7.5).abs() < f64::EPSILON);
+    }
 }

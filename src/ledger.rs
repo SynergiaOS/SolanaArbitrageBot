@@ -127,6 +127,7 @@ impl LedgerConnection {
         info!("This will require approval on your Ledger device");
 
         // Create a simple test message
+        #[allow(deprecated)]
         use solana_sdk::system_instruction;
 
         let test_instruction = system_instruction::transfer(

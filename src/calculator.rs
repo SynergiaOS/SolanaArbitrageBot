@@ -1,6 +1,7 @@
 //! Enhanced Profit Calculator with Real-time Data Support
 //! Optimized for high-frequency arbitrage calculations with minimal allocations
 
+use crate::config_manager::BotConfig;
 use log::info;
 use rust_decimal::prelude::*;
 use std::time::Instant;
@@ -55,11 +56,11 @@ pub struct ProfitCalculator {
 }
 
 impl ProfitCalculator {
-    pub fn new(config: &crate::Config) -> Self {
+    pub fn new(config: &BotConfig) -> Self {
         Self {
             // Pre-convert to f64 for performance
-            min_profit_percent_f64: config.limits.min_profit_percent.to_f64().unwrap_or(0.3),
-            max_slippage_percent_f64: config.limits.max_slippage_percent.to_f64().unwrap_or(0.5),
+            min_profit_percent_f64: config.trading.min_profit_percent.to_f64().unwrap_or(0.3),
+            max_slippage_percent_f64: config.trading.max_slippage_percent.to_f64().unwrap_or(0.5),
             dex_fee_percent_f64: 0.0025, // 0.25% typical DEX fee
             priority_fee_multiplier: 1.0,
             market_conditions: None,

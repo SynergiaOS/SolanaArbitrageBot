@@ -21,7 +21,7 @@ async fn test_safety_config_default() {
     assert_eq!(config.max_market_cap_usd, 100_000.0);
     assert_eq!(config.max_buy_tax_percent, 5.0);
     assert_eq!(config.max_sell_tax_percent, 5.0);
-    assert_eq!(config.max_token_age_minutes, 60);
+    assert_eq!(config.max_token_age_minutes, 8);
     assert_eq!(config.min_holders, 10);
     assert_eq!(config.max_dev_percentage, 30.0);
     assert!(config.enable_safety_checks);

@@ -3,7 +3,6 @@
 use anyhow::Result;
 use axum::{
     http::Method,
-    response::Html,
     routing::{get, post},
     Router,
 };
@@ -12,7 +11,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use tower::ServiceBuilder;
 use tower_http::{
-    cors::{Any, CorsLayer},
+    cors::CorsLayer,
     services::ServeDir,
 };
 

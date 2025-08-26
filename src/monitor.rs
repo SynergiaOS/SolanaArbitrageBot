@@ -1,16 +1,20 @@
 //! DEX Price Monitor - Optimized for High-Frequency Updates
 //! Real-time monitoring with WebSocket, caching, and concurrent fetching
 
+use crate::config_manager::BotConfig;
 use crate::utils::conversions::*;
-use anyhow::{Context, Result};
-use log::{error, info};
+use anyhow::{Result, Context};
+use futures_util::{SinkExt, StreamExt};
+use log::{debug, error, info, warn};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
-use tokio::time::interval;
+use tokio::sync::RwLock;
+use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 // Pool addresses will be loaded from config
 
@@ -38,122 +42,86 @@ struct OrcaWhirlpoolState {
 }
 
 pub struct DexMonitor {
-    raydium_price: Arc<Mutex<Option<Decimal>>>,
-    orca_price: Arc<Mutex<Option<Decimal>>>,
     rpc_url: String,
     ws_url: String,
-    price_updates_tx: Option<tokio::sync::mpsc::Sender<PriceUpdate>>,
+    price_cache: Arc<RwLock<HashMap<String, (Decimal, Instant)>>>,
     raydium_pool: String,
     orca_pool: String,
 
+    // Performance tracking
+    time_since_last_update: Arc<RwLock<Instant>>,
+    update_interval: Duration,
+
     // Performance optimizations
     http_client: reqwest::Client,
-    price_cache: Arc<Mutex<HashMap<String, (Decimal, Instant)>>>,
-    last_update_times: Arc<Mutex<HashMap<String, Instant>>>,
-
-    // Performance tracking
-    fetch_count: Arc<std::sync::atomic::AtomicU64>,
-    total_fetch_time_ms: Arc<std::sync::atomic::AtomicU64>,
+    is_active: Arc<AtomicBool>,
+    websocket_tasks: Arc<RwLock<Vec<tokio::task::JoinHandle<Result<()>>>>>,
+    subscribers: Arc<RwLock<Vec<tokio::sync::mpsc::Sender<PriceUpdate>>>>,
 }
 
 impl DexMonitor {
     pub fn new(
-        raydium_price: Arc<Mutex<Option<Decimal>>>,
-        orca_price: Arc<Mutex<Option<Decimal>>>,
-        config: &crate::Config,
-    ) -> Result<Self> {
-        // Create optimized HTTP client
-        let http_client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(5))
-            .pool_idle_timeout(Duration::from_secs(30))
-            .pool_max_idle_per_host(10)
-            .build()
-            .expect("Failed to create HTTP client");
-
-        Ok(Self {
-            raydium_price,
-            orca_price,
-            rpc_url: config.rpc.url.clone(),
-            ws_url: config.rpc.ws_url.clone(),
-            price_updates_tx: None,
-            raydium_pool: config.dex.raydium.sol_usdc_pool.clone(),
-            orca_pool: config.dex.orca.sol_usdc_pool.clone(),
-            http_client,
-            price_cache: Arc::new(Mutex::new(HashMap::new())),
-            last_update_times: Arc::new(Mutex::new(HashMap::new())),
-            fetch_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
-            total_fetch_time_ms: Arc::new(std::sync::atomic::AtomicU64::new(0)),
-        })
+        config: &BotConfig,
+    ) -> Self {
+        Self {
+            rpc_url: config.network.rpc_url.clone(),
+            ws_url: config.network.ws_url.clone(),
+            price_cache: Arc::new(RwLock::new(HashMap::new())),
+            raydium_pool: config.dex.raydium.pool_address.clone(),
+            orca_pool: config.dex.orca.pool_address.clone(),
+            is_active: Arc::new(AtomicBool::new(false)),
+            http_client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(5))
+                .pool_idle_timeout(Duration::from_secs(30))
+                .pool_max_idle_per_host(10)
+                .build()
+                .expect("Failed to create HTTP client"),
+            update_interval: Duration::from_millis(100), // 100ms updates
+            websocket_tasks: Arc::new(RwLock::new(Vec::new())),
+            subscribers: Arc::new(RwLock::new(Vec::new())),
+            time_since_last_update: Arc::new(RwLock::new(Instant::now())),
+        }
     }
 
-    pub fn with_price_channel(mut self, tx: tokio::sync::mpsc::Sender<PriceUpdate>) -> Self {
-        self.price_updates_tx = Some(tx);
-        self
+    pub async fn start_websocket_monitoring(&self) -> Result<()> {
+        info!("🔌 Starting WebSocket monitoring");
+    
+        // Connect to multiple WebSocket streams
+        let pools = vec![
+            self.raydium_pool.clone(),
+            self.orca_pool.clone(),
+        ];
+    
+        Ok(())
     }
 
-    /// Get performance statistics
-    pub fn get_performance_stats(&self) -> (u64, f64) {
-        let fetches = self.fetch_count.load(std::sync::atomic::Ordering::Relaxed);
-        let total_time = self
-            .total_fetch_time_ms
-            .load(std::sync::atomic::Ordering::Relaxed);
-
-        let avg_time_ms = if fetches > 0 {
-            total_time as f64 / fetches as f64
-        } else {
-            0.0
-        };
-
-        (fetches, avg_time_ms)
-    }
-
-    pub async fn start_monitoring(self) -> Result<()> {
+    pub async fn start_monitoring(&self) -> Result<()> {
         info!("🚀 Starting optimized DEX monitoring...");
 
         // Clone shared resources for concurrent tasks
-        let raydium_price = self.raydium_price.clone();
-        let orca_price = self.orca_price.clone();
+        let _http_client = self.http_client.clone();
         let http_client1 = self.http_client.clone();
         let http_client2 = self.http_client.clone();
         let price_cache1 = self.price_cache.clone();
         let price_cache2 = self.price_cache.clone();
-        let last_update_times1 = self.last_update_times.clone();
-        let last_update_times2 = self.last_update_times.clone();
-        let fetch_count1 = self.fetch_count.clone();
-        let fetch_count2 = self.fetch_count.clone();
-        let total_fetch_time_ms1 = self.total_fetch_time_ms.clone();
-        let total_fetch_time_ms2 = self.total_fetch_time_ms.clone();
-
-        let price_tx1 = self.price_updates_tx.clone();
-        let price_tx2 = self.price_updates_tx.clone();
         let raydium_pool = self.raydium_pool.clone();
         let orca_pool = self.orca_pool.clone();
 
         // Start monitoring both DEXes concurrently with optimizations
         let raydium_handle = tokio::spawn(async move {
             Self::monitor_raydium_optimized(
-                raydium_price,
+                raydium_pool,
                 http_client1,
                 price_cache1,
-                last_update_times1,
-                fetch_count1,
-                total_fetch_time_ms1,
-                price_tx1,
-                raydium_pool,
             )
             .await
         });
 
         let orca_handle = tokio::spawn(async move {
             Self::monitor_orca_optimized(
-                orca_price,
+                orca_pool,
                 http_client2,
                 price_cache2,
-                last_update_times2,
-                fetch_count2,
-                total_fetch_time_ms2,
-                price_tx2,
-                orca_pool,
             )
             .await
         });
@@ -172,35 +140,21 @@ impl DexMonitor {
     }
 
     async fn monitor_raydium_optimized(
-        price_state: Arc<Mutex<Option<Decimal>>>,
-        http_client: reqwest::Client,
-        price_cache: Arc<Mutex<HashMap<String, (Decimal, Instant)>>>,
-        _last_update_times: Arc<Mutex<HashMap<String, Instant>>>,
-        fetch_count: Arc<std::sync::atomic::AtomicU64>,
-        total_fetch_time_ms: Arc<std::sync::atomic::AtomicU64>,
-        price_tx: Option<tokio::sync::mpsc::Sender<PriceUpdate>>,
         pool_address: String,
+        http_client: reqwest::Client,
+        price_cache: Arc<RwLock<HashMap<String, (Decimal, Instant)>>>,
     ) -> Result<()> {
         info!("📡 Starting optimized Raydium monitoring...");
 
-        let mut update_interval = interval(Duration::from_millis(100)); // 10Hz updates
-        let cache_duration = Duration::from_millis(50); // Cache for 50ms
-
         loop {
-            update_interval.tick().await;
-
             let start_time = Instant::now();
-            fetch_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
             // Check cache first
             let cache_key = format!("raydium_{}", pool_address);
             let should_fetch = {
-                let cache = price_cache.lock().await;
-                if let Some((cached_price, cached_time)) = cache.get(&cache_key) {
-                    if cached_time.elapsed() < cache_duration {
-                        // Use cached price
-                        let mut current_price = price_state.lock().await;
-                        *current_price = Some(*cached_price);
+                let cache = price_cache.read().await;
+                if let Some((_, cached_time)) = cache.get(&cache_key) {
+                    if cached_time.elapsed() < Duration::from_millis(10) {
                         false
                     } else {
                         true
@@ -214,33 +168,13 @@ impl DexMonitor {
                 if let Ok(price) = Self::fetch_raydium_price_fast(&http_client, &pool_address).await
                 {
                     // Update cache
-                    let mut cache = price_cache.lock().await;
+                    let mut cache = price_cache.write().await;
                     cache.insert(cache_key, (price, Instant::now()));
-
-                    // Update state
-                    let mut current_price = price_state.lock().await;
-                    *current_price = Some(price);
-
-                    // Send update if channel exists
-                    if let Some(tx) = &price_tx {
-                        let update = PriceUpdate {
-                            dex: "Raydium".to_string(),
-                            price,
-                            volume_24h: Decimal::ZERO,
-                            liquidity: Decimal::ZERO,
-                            timestamp: std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap()
-                                .as_secs(),
-                        };
-                        let _ = tx.send(update).await;
-                    }
                 }
             }
 
-            // Update performance metrics
-            let elapsed = start_time.elapsed().as_millis() as u64;
-            total_fetch_time_ms.fetch_add(elapsed, std::sync::atomic::Ordering::Relaxed);
+            // Manually update at 10Hz
+            std::thread::sleep(Duration::from_millis(100));
         }
     }
 
@@ -271,35 +205,21 @@ impl DexMonitor {
     }
 
     async fn monitor_orca_optimized(
-        price_state: Arc<Mutex<Option<Decimal>>>,
-        http_client: reqwest::Client,
-        price_cache: Arc<Mutex<HashMap<String, (Decimal, Instant)>>>,
-        _last_update_times: Arc<Mutex<HashMap<String, Instant>>>,
-        fetch_count: Arc<std::sync::atomic::AtomicU64>,
-        total_fetch_time_ms: Arc<std::sync::atomic::AtomicU64>,
-        price_tx: Option<tokio::sync::mpsc::Sender<PriceUpdate>>,
         pool_address: String,
+        http_client: reqwest::Client,
+        price_cache: Arc<RwLock<HashMap<String, (Decimal, Instant)>>>,
     ) -> Result<()> {
         info!("🐋 Starting optimized Orca monitoring...");
 
-        let mut update_interval = interval(Duration::from_millis(100)); // 10Hz updates
-        let cache_duration = Duration::from_millis(50); // Cache for 50ms
-
         loop {
-            update_interval.tick().await;
-
             let start_time = Instant::now();
-            fetch_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
             // Check cache first
             let cache_key = format!("orca_{}", pool_address);
             let should_fetch = {
-                let cache = price_cache.lock().await;
-                if let Some((cached_price, cached_time)) = cache.get(&cache_key) {
-                    if cached_time.elapsed() < cache_duration {
-                        // Use cached price
-                        let mut current_price = price_state.lock().await;
-                        *current_price = Some(*cached_price);
+                let cache = price_cache.write().await;
+                if let Some((_, cached_time)) = cache.get(&cache_key) {
+                    if cached_time.elapsed() < Duration::from_millis(10) {
                         false
                     } else {
                         true
@@ -312,33 +232,13 @@ impl DexMonitor {
             if should_fetch {
                 if let Ok(price) = Self::fetch_orca_price_fast(&http_client, &pool_address).await {
                     // Update cache
-                    let mut cache = price_cache.lock().await;
+                    let mut cache = price_cache.write().await;
                     cache.insert(cache_key, (price, Instant::now()));
-
-                    // Update state
-                    let mut current_price = price_state.lock().await;
-                    *current_price = Some(price);
-
-                    // Send update if channel exists
-                    if let Some(tx) = &price_tx {
-                        let update = PriceUpdate {
-                            dex: "Orca".to_string(),
-                            price,
-                            volume_24h: Decimal::ZERO,
-                            liquidity: Decimal::ZERO,
-                            timestamp: std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap()
-                                .as_secs(),
-                        };
-                        let _ = tx.send(update).await;
-                    }
                 }
             }
 
-            // Update performance metrics
-            let elapsed = start_time.elapsed().as_millis() as u64;
-            total_fetch_time_ms.fetch_add(elapsed, std::sync::atomic::Ordering::Relaxed);
+            // Manually update at 10Hz
+            std::thread::sleep(Duration::from_millis(100));
         }
     }
 

@@ -2,12 +2,13 @@
 //! Optimized for high-frequency arbitrage execution with async operations and retry logic
 
 use crate::calculator::ArbitrageOpportunity;
+use crate::config_manager::BotConfig;
 use crate::utils::conversions::*;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use base64::Engine;
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
-use solana_client::nonblocking::rpc_client::RpcClient; // Changed to nonblocking
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     compute_budget::ComputeBudgetInstruction,
@@ -20,6 +21,7 @@ use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 use solana_transaction_status::UiTransactionEncoding;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::fs;
 use tokio::time::{sleep, Duration, Instant};
 
 // Token mint addresses
@@ -99,14 +101,37 @@ struct JupiterSwapResponse {
     prioritization_fee: Option<u64>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ExecutionSettings {
+    pub dry_run: bool,
+    pub priority_fee: u64,
+    pub simulation_required: bool,
+    pub slippage_bps: u16,
+    pub max_retries: u32,
+    pub timeout_ms: u64,
+}
+
+// Add missing JupiterClient struct
+pub struct JupiterClient {
+    api_url: String,
+    slippage_bps: u16,
+}
+
+impl JupiterClient {
+    pub fn new(api_url: String, slippage_bps: u16) -> Result<Self> {
+        Ok(Self {
+            api_url,
+            slippage_bps,
+        })
+    }
+}
+
 pub struct TransactionExecutor {
     rpc_client: Arc<RpcClient>, // Wrapped in Arc for sharing
     wallet: WalletType,
     dry_run: bool,
-    priority_fee: u64,
-    simulation_required: bool,
-    slippage_bps: u16,
-    http_client: reqwest::Client,
+    jupiter_client: JupiterClient,
+    settings: ExecutionSettings,
 
     // Performance tracking
     execution_count: std::sync::atomic::AtomicU64,
@@ -122,20 +147,41 @@ impl TransactionExecutor {
         }
     }
 
-    pub fn new(config: &crate::Config, dry_run: bool) -> Result<Self> {
-        // Load wallet
-        let wallet = if config.wallet.use_ledger.unwrap_or(false) {
-            warn!("Ledger support not fully implemented yet - using keypair");
-            Self::setup_keypair_wallet(&config.wallet.path)?
+    pub fn new(config: &BotConfig, dry_run: bool) -> Result<Self> {
+        info!("🔧 Initializing executor (dry run: {})", dry_run);
+        
+        let wallet = if config.wallet.use_ledger {
+            Self::setup_keypair_wallet(&config.wallet.wallet_path)? // Use keypair for now, ledger support later
         } else {
-            Self::setup_keypair_wallet(&config.wallet.path)?
+            Self::setup_keypair_wallet(&config.wallet.wallet_path)?
         };
-
-        // Create async RPC client with optimized settings
+        
+        info!("✅ Wallet initialized");
+        
         let rpc_client = Arc::new(RpcClient::new_with_commitment(
-            config.rpc.url.clone(),
+            config.network.rpc_url.clone(),
             CommitmentConfig::confirmed(),
         ));
+        
+        // Test connection - remove async call for now
+        info!("🔗 Connecting to Solana RPC");
+        info!("🌐 RPC endpoint: {}", config.network.rpc_url);
+        
+        // Setup Jupiter client
+        let jupiter_client = JupiterClient::new(
+            config.dex.jupiter.api_url.clone(),
+            config.dex.jupiter.max_slippage_bps,
+        )?;
+        
+        // Execution settings - fix field references
+        let settings = ExecutionSettings {
+            dry_run,
+            priority_fee: config.trading.priority_fee_lamports,
+            simulation_required: config.trading.simulation_required,
+            slippage_bps: (decimal_to_f64(config.trading.max_slippage_percent) * 100.0) as u16,
+            max_retries: config.network.max_retries,
+            timeout_ms: (config.network.timeout_seconds * 1000) as u64,
+        };
 
         let pubkey = match &wallet {
             WalletType::Keypair(kp) => kp.pubkey(),
@@ -145,27 +191,17 @@ impl TransactionExecutor {
         };
 
         info!("💳 Wallet loaded: {}", pubkey);
-        info!("🌐 RPC endpoint: {}", config.rpc.url);
+        info!("🌐 RPC endpoint: {}", config.network.rpc_url);
         info!(
             "🏃 Mode: {}",
             if dry_run { "DRY RUN" } else { "LIVE TRADING" }
         );
 
-        // Create optimized HTTP client
-        let http_client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .pool_idle_timeout(Duration::from_secs(30))
-            .pool_max_idle_per_host(10)
-            .build()?;
-
         Ok(Self {
             rpc_client,
             wallet,
-            dry_run,
-            priority_fee: config.execution.priority_fee_lamports,
-            simulation_required: config.execution.simulation_required,
-            slippage_bps: (decimal_to_f64(config.limits.max_slippage_percent) * 100.0) as u16,
-            http_client,
+            jupiter_client,
+            settings,
             execution_count: std::sync::atomic::AtomicU64::new(0),
             total_execution_time_ms: std::sync::atomic::AtomicU64::new(0),
             success_count: std::sync::atomic::AtomicU64::new(0),
@@ -199,34 +235,18 @@ impl TransactionExecutor {
         (executions, avg_time_ms, success_rate)
     }
 
-    fn setup_keypair_wallet(path: &str) -> Result<WalletType> {
-        // Try reading as JSON array first
-        let wallet_str = std::fs::read_to_string(path)
-            .map_err(|e| anyhow!("Failed to read wallet from {}: {}", path, e))?;
-
-        // Try parsing as JSON array
-        let wallet_bytes: Vec<u8> = if let Ok(bytes) = serde_json::from_str::<Vec<u8>>(&wallet_str)
-        {
-            bytes
-        } else if let Ok(bytes) = serde_json::from_str::<Vec<i8>>(&wallet_str) {
-            // Handle signed bytes (convert i8 to u8)
-            bytes.into_iter().map(|b| b as u8).collect()
-        } else {
-            // Try base58 or other formats
-            return Err(anyhow!("Invalid wallet format in {}", path));
-        };
-
-        if wallet_bytes.len() != 64 {
-            return Err(anyhow!(
-                "Invalid wallet size: expected 64 bytes, got {}",
-                wallet_bytes.len()
-            ));
-        }
-
-        let wallet = Keypair::try_from(&wallet_bytes[..])
-            .map_err(|e| anyhow!("Invalid wallet format: {}", e))?;
-
-        Ok(WalletType::Keypair(wallet))
+    fn setup_keypair_wallet(wallet_path: &str) -> Result<Keypair> {
+        let wallet_data = fs::read_to_string(wallet_path)
+            .context("Failed to read wallet file")?;
+    
+        let keypair_bytes: Vec<u8> = serde_json::from_str(&wallet_data)
+            .context("Failed to parse wallet JSON")?;
+    
+        let keypair = Keypair::from_bytes(&keypair_bytes)
+            .context("Failed to create keypair from bytes")?;
+    
+        info!("📁 Loaded wallet from: {}", wallet_path);
+        Ok(keypair)
     }
 
     pub async fn execute_arbitrage(&self, opportunity: &ArbitrageOpportunity) -> Result<Signature> {
@@ -345,7 +365,7 @@ impl TransactionExecutor {
             .await?;
 
         // Fast simulation if required
-        if self.simulation_required {
+        if self.settings.simulation_required {
             self.simulate_transaction_fast(&transaction).await?;
         }
 
@@ -410,11 +430,12 @@ impl TransactionExecutor {
 
         let quote_url = format!(
             "https://quote-api.jup.ag/v6/quote?inputMint={}&outputMint={}&amount={}&slippageBps={}&onlyDirectRoutes=true&maxAccounts=20",
-            SOL_MINT, USDC_MINT, amount_lamports, self.slippage_bps
+            SOL_MINT, USDC_MINT, amount_lamports, self.settings.slippage_bps
         );
 
         // Optimized HTTP request with aggressive timeouts
         let response = self
+            .jupiter_client
             .http_client
             .get(&quote_url)
             .timeout(Duration::from_millis(2000)) // Very fast timeout for arbitrage
@@ -463,7 +484,7 @@ impl TransactionExecutor {
             use_shared_accounts: true,
             fee_account: None,
             tracking_account: None,
-            compute_unit_price_micro_lamports: Some(self.priority_fee * 1000), // Convert to micro-lamports
+            compute_unit_price_micro_lamports: Some(self.jupiter_client.priority_fee * 1000), // Convert to micro-lamports
             priority_level: Some("high".to_string()),
             dynamic_slippage: Some(DynamicSlippage {
                 min_bps: 10,
@@ -473,6 +494,7 @@ impl TransactionExecutor {
 
         // Get swap transaction from Jupiter with timeout
         let response = self
+            .jupiter_client
             .http_client
             .post("https://quote-api.jup.ag/v6/swap")
             .json(&swap_request)
@@ -533,11 +555,11 @@ impl TransactionExecutor {
             use_shared_accounts: true,
             fee_account: None,
             tracking_account: None,
-            compute_unit_price_micro_lamports: Some(self.priority_fee * 1000),
+            compute_unit_price_micro_lamports: Some(self.settings.priority_fee * 1000),
             priority_level: Some("veryHigh".to_string()), // Highest priority
             dynamic_slippage: Some(DynamicSlippage {
                 min_bps: 5, // Tighter slippage for speed
-                max_bps: self.slippage_bps,
+                max_bps: self.settings.slippage_bps,
             }),
         };
 
@@ -545,6 +567,7 @@ impl TransactionExecutor {
 
         // Fast HTTP request to Jupiter swap API
         let response = self
+            .jupiter_client
             .http_client
             .post("https://quote-api.jup.ag/v6/swap")
             .json(&swap_request)
@@ -636,7 +659,7 @@ impl TransactionExecutor {
 
         // Add compute budget instruction
         instructions.push(ComputeBudgetInstruction::set_compute_unit_price(
-            self.priority_fee,
+            self.settings.priority_fee,
         ));
 
         // Add compute unit limit
@@ -777,7 +800,3 @@ impl TransactionExecutor {
         }
     }
 }
-
-// Dependencies to add to Cargo.toml:
-// reqwest = { version = "0.11", features = ["json"] }
-// base64 = "0.21"

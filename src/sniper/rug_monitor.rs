@@ -3,7 +3,7 @@
 
 use crate::sniper::{NewToken, Position};
 use anyhow::{anyhow, Result};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use log::{debug, error, info, warn};
 use reqwest::Client;
 use serde_json;
@@ -11,7 +11,6 @@ use solana_account_decoder::UiAccountEncoding;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_config::RpcAccountInfoConfig;
 use solana_program_pack::Pack;
-use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
 use spl_token::state::Mint;
 use std::collections::HashMap;
@@ -94,6 +93,12 @@ impl RugMonitor {
             monitored_positions: Arc::new(RwLock::new(HashMap::new())),
         }
     }
+
+    // Read-only getter for tests and external inspection
+    pub fn config(&self) -> &RugMonitorConfig {
+        &self.config
+    }
+
 
     /// Start monitoring a new position
     pub async fn start_monitoring(&self, position: Position, token_data: NewToken) -> Result<()> {

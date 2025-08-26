@@ -8,11 +8,11 @@ pub mod rug_monitor;
 pub mod safety;
 
 // Enhanced sniper components
-// Temporarily disabled due to compilation errors
-// pub mod enhanced_detector;
-// pub mod fast_executor;
-// pub mod rug_detector;
-// pub mod profit_taker;
+pub mod enhanced_detector;
+pub mod fast_executor;
+pub mod rug_detector;
+pub mod profit_taker;
+pub mod enhanced_sniper;
 
 // Simple but effective components
 pub mod detector;
@@ -24,11 +24,12 @@ pub use position::{Position, PositionManager, SellAction};
 pub use rug_monitor::{MonitoredPosition, RugAlert, RugMonitor, RugMonitorConfig};
 pub use safety::{SafetyChecker, SafetyResult};
 
-// Enhanced exports (temporarily disabled)
-// pub use enhanced_detector::{EnhancedPoolDetector, EnhancedTokenLaunch};
-// pub use fast_executor::{FastExecutor, FastExecutorConfig, FastExecutionResult};
-// pub use rug_detector::{RugDetector, RugDetectorConfig, RugRiskAssessment};
-// pub use profit_taker::{ProfitTaker, ProfitTakerConfig, ProfitPosition};
+// Enhanced exports
+pub use enhanced_detector::{EnhancedPoolDetector, EnhancedTokenLaunch};
+pub use fast_executor::{FastExecutor, FastExecutorConfig, FastExecutionResult};
+pub use rug_detector::{RugDetector, RugDetectorConfig, RugRiskAssessment};
+pub use profit_taker::{ProfitTaker, ProfitTakerConfig, ProfitPosition};
+pub use enhanced_sniper::{EnhancedSniperBot, EnhancedSniperConfig};
 
 use anyhow::Result;
 use log::{error, info, warn};
@@ -96,8 +97,6 @@ impl Default for SafetyConfig {
 pub struct SniperConfig {
     pub max_position_sol: f64,
     pub min_liquidity_sol: f64,
-    pub max_buy_tax: f64,
-    pub max_sell_tax: f64,
     pub profit_target_percent: f64,
     pub stop_loss_percent: f64,
     pub max_market_cap: f64,
@@ -111,9 +110,7 @@ impl Default for SniperConfig {
     fn default() -> Self {
         Self {
             max_position_sol: 0.05,
-            min_liquidity_sol: 5.0,
-            max_buy_tax: 5.0,
-            max_sell_tax: 5.0,
+            min_liquidity_sol: 3.0,
             profit_target_percent: 200.0,
             stop_loss_percent: 50.0,
             max_market_cap: 100_000.0,
@@ -290,7 +287,7 @@ impl SniperEngine {
                 self.position_manager.add_position(position.clone()).await;
 
                 // KRYTYCZNE: Rozpocznij monitoring rug pull po zakupie
-                let mut rug_monitor = self.rug_monitor.lock().await;
+                let rug_monitor = self.rug_monitor.lock().await;
                 if let Err(e) = rug_monitor.start_monitoring(position, token.clone()).await {
                     error!(
                         "❌ Failed to start rug monitoring for {}: {}",
@@ -356,7 +353,7 @@ impl SniperEngine {
         info!("🛡️ Starting rug pull monitoring...");
 
         loop {
-            let mut rug_monitor = self.rug_monitor.lock().await;
+            let rug_monitor = self.rug_monitor.lock().await;
             // Check all monitored positions for rug pull indicators
             match rug_monitor.check_all_positions().await {
                 Ok(alerts) => {

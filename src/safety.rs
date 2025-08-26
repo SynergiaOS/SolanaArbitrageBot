@@ -2,6 +2,7 @@
 //! Chroni przed stratami i błędami, szczególnie ważne przy użyciu Ledger
 
 use crate::utils::conversions::*;
+use crate::config_manager::BotConfig;
 use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
 use log::{error, info, warn};
@@ -104,8 +105,11 @@ impl CircuitBreaker {
 #[derive(Clone)]
 pub struct SafetyGuard {
     max_position_sol: f64,
-    // Read dynamically from runtime_config
-    runtime_config: Option<Arc<RwLock<crate::web::BotConfig>>>,
+    // Read dynamically from runtime_config - conditional compilation for web feature
+    #[cfg(feature = "web")]
+    runtime_config: Option<Arc<RwLock<BotConfig>>>,
+    #[cfg(not(feature = "web"))]  
+    runtime_config: Option<()>, // Placeholder when web feature disabled
     min_pool_liquidity_usd: f64,
 
     // Ledger-specific limits
@@ -128,10 +132,20 @@ struct TradeRecord {
     success: bool,
 }
 
+/// Simple shared state structure - placeholder for missing SharedState
+#[derive(Clone)]
+pub struct SharedState {
+    pub trades_today: Arc<Mutex<u32>>,
+    pub profit_today: Arc<Mutex<Decimal>>,
+}
+
 impl SafetyGuard {
-    pub fn new(config: &crate::Config) -> Self {
+    pub fn new(config: &BotConfig) -> Self {
         Self {
-            max_position_sol: decimal_to_f64(config.limits.max_position_sol),
+            max_position_sol: decimal_to_f64(config.trading.max_position_sol),
+            #[cfg(feature = "web")]
+            runtime_config: None,
+            #[cfg(not(feature = "web"))]
             runtime_config: None,
             min_pool_liquidity_usd: 50000.0, // Default minimum liquidity
 
@@ -147,24 +161,34 @@ impl SafetyGuard {
         }
     }
 
-    pub fn with_runtime_config(mut self, cfg: Arc<RwLock<crate::web::BotConfig>>) -> Self {
+    #[cfg(feature = "web")]
+    pub fn with_runtime_config(mut self, cfg: Arc<RwLock<BotConfig>>) -> Self {
         self.runtime_config = Some(cfg);
         self
     }
+    
+    #[cfg(not(feature = "web"))]
+    pub fn with_runtime_config(self, _cfg: ()) -> Self {
+        // No-op when web feature is disabled
+        self
+    }
 
-    pub async fn should_continue_trading(&self, state: &crate::SharedState) -> bool {
+    pub async fn should_continue_trading(&self, state: &SharedState) -> bool {
         let trades_today = *state.trades_today.lock().await;
         let profit_today = *state.profit_today.lock().await;
 
         // Read dynamic safety limits from runtime_config if available
-        let (max_daily_trades, max_daily_loss_usd) = if let Some(ref arc_cfg) = self.runtime_config
-        {
+        #[cfg(feature = "web")]
+        let (max_daily_trades, max_daily_loss_usd) = if let Some(ref arc_cfg) = self.runtime_config {
             let cfg = arc_cfg.read().await.clone();
-            (cfg.max_daily_trades, decimal_to_f64(cfg.max_daily_loss_usd))
+            (cfg.trading.max_daily_trades, decimal_to_f64(cfg.trading.max_daily_loss_usd))
         } else {
             // Fallback to conservative defaults if runtime_config not attached
             (30u32, 100.0f64)
         };
+        
+        #[cfg(not(feature = "web"))]
+        let (max_daily_trades, max_daily_loss_usd) = (30u32, 100.0f64);
 
         // Check daily trade limit
         if trades_today >= max_daily_trades {
@@ -218,9 +242,10 @@ impl SafetyGuard {
         using_ledger: bool,
     ) -> Result<bool> {
         // Determine effective max_position_sol from runtime_config if available
+        #[cfg(feature = "web")]
         let effective_max_position = if let Some(ref arc_cfg) = self.runtime_config {
             let cfg = arc_cfg.read().await.clone();
-            let dyn_max = decimal_to_f64(cfg.max_position_sol);
+            let dyn_max = decimal_to_f64(cfg.trading.max_position_sol);
             if (dyn_max - self.max_position_sol).abs() > f64::EPSILON {
                 info!(
                     "🔧 Effective max_position_sol updated (SafetyGuard): static={} -> runtime={}",
@@ -231,6 +256,9 @@ impl SafetyGuard {
         } else {
             self.max_position_sol
         };
+        
+        #[cfg(not(feature = "web"))]
+        let effective_max_position = self.max_position_sol;
 
         // Check position size against effective limit
         if opportunity.amount_sol > effective_max_position {
@@ -312,7 +340,7 @@ impl SafetyGuard {
         );
     }
 
-    pub async fn reset_daily_limits(&self, state: &crate::SharedState) {
+    pub async fn reset_daily_limits(&self, state: &SharedState) {
         let mut trades = state.trades_today.lock().await;
         *trades = 0;
 
@@ -516,63 +544,18 @@ impl SafetyGuard {
 mod tests {
     use super::*;
 
-    fn test_config() -> crate::Config {
-        crate::Config {
-            rpc: crate::RpcConfig {
-                url: "test".to_string(),
-                ws_url: "test".to_string(),
-            },
-            wallet: crate::WalletConfig {
-                path: "test".to_string(),
-                use_ledger: Some(false),
-                ledger_path: None,
-            },
-            dex: crate::DexConfig {
-                raydium: crate::DexInfo {
-                    program_id: "test".to_string(),
-                    sol_usdc_pool: "test".to_string(),
-                },
-                orca: crate::DexInfo {
-                    program_id: "test".to_string(),
-                    sol_usdc_pool: "test".to_string(),
-                },
-            },
-            limits: crate::LimitsConfig {
-                max_position_sol: rust_decimal::Decimal::from_f64_retain(10.0).unwrap(),
-                min_profit_percent: rust_decimal::Decimal::from_f64_retain(0.3).unwrap(),
-                min_profit_usd: rust_decimal::Decimal::from_f64_retain(1.0).unwrap(),
-                max_slippage_percent: rust_decimal::Decimal::from_f64_retain(0.5).unwrap(),
-                max_daily_loss_usd: rust_decimal::Decimal::from_f64_retain(100.0).unwrap(),
-                max_daily_trades: 30,
-            },
-            execution: crate::ExecutionConfig {
-                priority_fee_lamports: 10000,
-                simulation_required: true,
-                max_retries: 3,
-            },
-            discord: None,
-            web: None,
-        }
-    }
-
-    fn test_state() -> crate::SharedState {
-        crate::SharedState {
-            raydium_price: Arc::new(Mutex::new(Some(
-                rust_decimal::Decimal::from_f64_retain(150.0).unwrap(),
-            ))),
-            orca_price: Arc::new(Mutex::new(Some(
-                rust_decimal::Decimal::from_f64_retain(150.0).unwrap(),
-            ))),
+    // Simplified test helper
+    fn test_state() -> SharedState {
+        SharedState {
             trades_today: Arc::new(Mutex::new(0)),
-            profit_today: Arc::new(Mutex::new(
-                rust_decimal::Decimal::from_f64_retain(0.0).unwrap(),
-            )),
+            profit_today: Arc::new(Mutex::new(Decimal::ZERO)),
         }
     }
 
     #[tokio::test]
     async fn test_consecutive_losses() {
-        let guard = SafetyGuard::new(&test_config());
+        let config = BotConfig::default();
+        let guard = SafetyGuard::new(&config);
 
         // Zapisz 3 straty
         for _ in 0..3 {

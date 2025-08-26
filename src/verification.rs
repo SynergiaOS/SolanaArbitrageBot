@@ -1,11 +1,10 @@
 //! On-chain transaction verification module
 //! Verifies arbitrage transactions after execution
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use log::{debug, info, warn};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{commitment_config::CommitmentConfig, signature::Signature};
-use solana_transaction_status::TransactionConfirmationStatus;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;

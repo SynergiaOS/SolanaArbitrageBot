@@ -7,14 +7,15 @@ use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
 use rust_decimal::Decimal;
-use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_client::rpc_client::RpcClient;
+use solana_sdk::signature::{Signer, Signature}; // Add missing Signature import
 use solana_sdk::{
-    pubkey::Pubkey,
-    signature::{Signature, Keypair},
-    transaction::Transaction,
     instruction::Instruction,
-    commitment_config::CommitmentConfig,
-    compute_budget::ComputeBudgetInstruction,
+    pubkey::Pubkey,
+    signature::Keypair,
+    transaction::Transaction,
+    commitment_config::{CommitmentConfig, CommitmentLevel}, // Add CommitmentLevel
+    compute_budget::ComputeBudgetInstruction, // Add missing import
 };
 use anyhow::{Result, anyhow};
 use log::{info, warn, error, debug};
@@ -331,7 +332,7 @@ impl FastExecutor {
                 transaction,
                 solana_client::rpc_config::RpcSendTransactionConfig {
                     skip_preflight: self.config.skip_preflight,
-                    preflight_commitment: Some(CommitmentConfig::confirmed()),
+                    preflight_commitment: Some(CommitmentLevel::Confirmed), // Fix: use CommitmentLevel
                     encoding: Some(solana_transaction_status::UiTransactionEncoding::Base64),
                     max_retries: Some(0), // No retries in parallel mode
                     min_context_slot: None,
@@ -358,9 +359,9 @@ impl FastExecutor {
             transaction,
             solana_client::rpc_config::RpcSendTransactionConfig {
                 skip_preflight: self.config.skip_preflight,
-                preflight_commitment: Some(CommitmentConfig::confirmed()),
+                preflight_commitment: Some(CommitmentLevel::Confirmed), // Fix: use CommitmentLevel
                 encoding: Some(solana_transaction_status::UiTransactionEncoding::Base64),
-                max_retries: Some(self.config.max_retries),
+                max_retries: Some(self.config.max_retries.try_into().unwrap()), // Fix: convert u32 to usize
                 min_context_slot: None,
             }
         ).await?;
@@ -378,7 +379,7 @@ impl FastExecutor {
         tokio::time::sleep(Duration::from_millis(1000)).await;
         
         // Get transaction details
-        let transaction = self.rpc_client
+        let _transaction = self.rpc_client
             .get_transaction_with_config(
                 signature,
                 solana_client::rpc_config::RpcTransactionConfig {
@@ -399,7 +400,7 @@ impl FastExecutor {
     }
     
     /// Build Jupiter swap instruction
-    async fn build_jupiter_swap_instruction(&self, quote: &JupiterQuote) -> Result<Instruction> {
+    async fn build_jupiter_swap_instruction(&self, _quote: &JupiterQuote) -> Result<Instruction> {
         // This would build the actual Jupiter swap instruction
         // Simplified for now
         Ok(Instruction::new_with_bytes(

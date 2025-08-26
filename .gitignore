@@ -45,6 +45,25 @@ private_key.json
 .env
 .env.local
 
+# Additional wallet security
+*wallet*.json
+*-wallet.json
+wallet_backup_*.json
+devnet-wallet.json
+mainnet-wallet.json
+testnet-wallet.json
+*.key
+*.pem
+*.p12
+*.pfx
+
+# API Keys & Secrets
+api_keys.json
+secrets.json
+config.secret.yaml
+.secrets/
+credentials/
+
 # Temporary files
 *.tmp
 *.temp
