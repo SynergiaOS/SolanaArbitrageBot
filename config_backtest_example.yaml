@@ -1,0 +1,223 @@
+# Solana Arbitrage Bot - Backtesting Configuration Example
+# This configuration extends the base config with backtesting-specific settings
+
+# Inherit base configuration
+network: mainnet
+rpc:
+  primary: "https://api.mainnet-beta.solana.com"
+  backup: "https://mainnet.helius-rpc.com"
+  ws_url: "wss://api.mainnet-beta.solana.com"
+
+wallet:
+  path: "./keypair.json"
+  use_ledger: false
+  
+dex:
+  raydium:
+    program_id: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"
+    sol_usdc_pool: "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2"
+  orca:
+    program_id: "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"
+    sol_usdc_pool: "EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U"
+  jupiter:
+    program_id: "JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB"
+    api_url: "https://quote-api.jup.ag/v6"
+
+# Trading configuration for backtesting
+trading:
+  limits:
+    max_position_sol: 10.0
+    min_profit_percent: 0.3
+    min_profit_usd: 1.0
+    max_slippage_percent: 0.5
+    max_daily_loss_usd: 100.0
+    max_daily_trades: 100
+  
+  execution:
+    priority_fee_lamports: 10000
+    simulation_required: true
+    max_retries: 3
+    timeout_seconds: 30
+
+# Backtesting-specific configuration
+backtesting:
+  # Data sources configuration
+  data_sources:
+    # CSV files with historical price data
+    - type: csv
+      path: "./data/historical/"
+      pairs: 
+        - "SOL/USDC"
+        - "RAY/USDC" 
+        - "ORCA/USDC"
+        - "MNGO/USDC"
+      # Expected CSV format: timestamp,dex,pair,price,volume_24h,liquidity,spread_bps
+      
+    # Database source for large datasets
+    - type: database
+      url: "postgresql://user:password@localhost:5432/solana_historical_data"
+      cache_size: 10000  # Number of price points to cache in memory
+      batch_size: 5000   # Batch size for database queries
+      
+    # Solana RPC for recent historical data
+    - type: rpc
+      endpoint: "https://api.mainnet-beta.solana.com"
+      lookback_days: 30
+      programs:
+        - "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"  # Raydium
+        - "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"  # Orca
+      
+    # Live data integration for walk-forward analysis
+    - type: live
+      buffer_duration: "1h"  # How much live data to buffer
+      pairs:
+        - "SOL/USDC"
+        - "RAY/USDC"
+
+  # Simulation parameters
+  simulation:
+    # Latency simulation model
+    latency_model: "realistic"  # realistic, optimistic, pessimistic, custom
+    base_latency_ms: 150        # Base network latency
+    volatility_impact: 0.3      # How volatility affects latency (0.0-1.0)
+    latency_jitter: 20.0        # Standard deviation of latency jitter
+    
+    # Network congestion multipliers
+    congestion_multipliers:
+      low: 1.0
+      medium: 1.5
+      high: 2.5
+      extreme: 5.0
+    
+    # Slippage simulation model
+    slippage_model: "depth_based"  # depth_based, linear, impact_curve
+    base_slippage_bps: 5           # Base slippage in basis points
+    liquidity_impact_factor: 0.1   # How liquidity affects slippage
+    
+    # Success rate simulation
+    base_success_rate: 0.98        # Base execution success rate
+    congestion_impact: 0.1         # Success rate reduction per congestion level
+    
+    # Fee modeling
+    dynamic_fees: true             # Use dynamic fee calculation
+    min_priority_fee: 5000         # Minimum priority fee in lamports
+    max_priority_fee: 50000        # Maximum priority fee in lamports
+    
+  # Analysis configuration
+  analysis:
+    # Benchmark for comparison
+    benchmark: "buy_and_hold"      # buy_and_hold, equal_weight, market_neutral, none
+    benchmark_asset: "SOL"         # Asset to use for buy_and_hold benchmark
+    
+    # Risk analysis parameters
+    risk_free_rate: 0.02           # Annual risk-free rate (2%)
+    confidence_levels: [0.95, 0.99] # Confidence levels for VaR calculation
+    
+    # Performance calculation settings
+    trading_days_per_year: 365     # Days per year for annualized metrics
+    compound_returns: true         # Use compound returns for calculations
+    
+    # Strategy comparison
+    compare_strategies: true       # Enable strategy-by-strategy analysis
+    time_period_analysis: true     # Analyze performance by time periods
+    
+  # Report generation configuration  
+  reporting:
+    # Output formats
+    formats: ["html", "json", "csv", "pdf"]
+    
+    # Report content
+    include_charts: true           # Generate interactive charts
+    include_trade_details: true    # Include individual trade data
+    include_strategy_breakdown: true # Break down by strategy
+    include_risk_analysis: true    # Include risk metrics
+    
+    # Chart configuration
+    chart_theme: "dark"           # light, dark, auto
+    chart_resolution: "daily"     # minute, hourly, daily, weekly
+    
+    # Output settings
+    output_directory: "./backtest_results/"
+    filename_template: "backtest_{strategy}_{start_date}_{end_date}"
+    compress_outputs: true        # Compress large result files
+    
+  # Optimization integration
+  optimization:
+    # GEPA integration
+    enable_gepa: true
+    population_size: 50
+    generations: 100
+    mutation_rate: 0.1
+    crossover_rate: 0.8
+    
+    # Optimization objectives and weights
+    objectives:
+      profit_weight: 0.4          # Weight for total profit optimization
+      risk_weight: 0.3            # Weight for risk minimization
+      consistency_weight: 0.2     # Weight for consistent returns
+      execution_weight: 0.1       # Weight for execution efficiency
+    
+    # Walk-forward analysis
+    walk_forward_enabled: true
+    walk_forward_window: "3 months" # Training window size
+    walk_forward_step: "1 month"    # Step size between validations
+    min_trades_per_period: 10       # Minimum trades for valid analysis
+    
+    # Parameter ranges for optimization
+    parameter_ranges:
+      min_profit_percent: [0.1, 1.0]
+      max_position_sol: [1.0, 50.0]
+      max_slippage_percent: [0.1, 1.0]
+    
+  # Live validation configuration
+  live_validation:
+    enabled: true
+    validation_window: "30 days"   # Historical window for validation
+    validation_interval: "1 hour"  # How often to run validation
+    alert_threshold: 0.2           # Deviation threshold for alerts (20%)
+    
+    # Model drift detection
+    drift_detection: true
+    drift_threshold: 0.15          # 15% profit deviation triggers drift alert
+    drift_window: "7 days"         # Window for drift calculation
+    
+    # Performance tracking
+    track_accuracy: true           # Track prediction accuracy
+    accuracy_metrics: ["profit", "win_rate", "drawdown"]
+    
+  # Advanced features
+  advanced:
+    # Monte Carlo simulation
+    monte_carlo_enabled: false
+    monte_carlo_runs: 1000
+    
+    # Regime detection
+    regime_detection: false
+    regime_indicators: ["volatility", "volume", "spread"]
+    
+    # Stress testing
+    stress_testing: false
+    stress_scenarios: ["high_volatility", "low_liquidity", "network_congestion"]
+    
+    # Multi-timeframe analysis
+    timeframes: ["1m", "5m", "15m", "1h", "1d"]
+    primary_timeframe: "5m"
+
+# Monitoring and alerting
+monitoring:
+  discord:
+    webhook: ""
+    enabled: false
+  
+  alerts:
+    backtest_completion: true
+    optimization_progress: true
+    validation_alerts: true
+    performance_degradation: true
+
+# Development and debugging
+debug:
+  log_level: "info"              # error, warn, info, debug, trace
+  save_intermediate_results: false # Save results at each step
+  profile_performance: false      # Enable performance profiling
+  validate_data_integrity: true  # Run data validation checks

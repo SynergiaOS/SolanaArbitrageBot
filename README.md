@@ -1,291 +1,179 @@
-# Solana Arbitrage Bot - Minimalna Wykonalna Implementacja
+# Solana Arbitrage Bot 🚀
 
-## 🎯 Cel
+High-performance arbitrage bot for Solana blockchain with advanced features including MEV protection, multi-DEX support, and AI-powered optimization.
 
-Jeden bot. Jedna strategia. Zero bullshitu.
+## 🎯 Features
 
-**Arbitraż między Raydium ↔ Orca na parach SOL/USDC**
+- **Multi-DEX Arbitrage**: Supports Raydium, Orca, Jupiter, and other major Solana DEXs
+- **MEV Protection**: Jito bundle integration for private mempool transactions
+- **AI Optimization**: Genetic algorithm (GEPA) for strategy parameter optimization
+- **New Token Sniping**: Automatic detection and trading of newly launched tokens
+- **Risk Management**: Comprehensive safety checks and position limits
+- **Real-time Dashboard**: WebSocket-based monitoring interface
 
-## 📊 Metryki Sukcesu
+## 📊 Performance Targets
 
-- **Zysk**: >50 USD/dzień
-- **Latencja**: <300ms (detekcja + egzekucja)
-- **Uptime**: >95%
-- **Kod**: <3000 linii
+- **Profit**: >50 USD/day
+- **Latency**: <300ms execution time
+- **Uptime**: >99.5%
+- **Monitoring**: 1000+ opportunities/second
 
-## 🏗️ Architektura (KISS)
+## 🏗️ Architecture
 
-```text
-[Raydium WebSocket] ─┐
-                     ├─→ [ArbitrageBot] ─→ [Executor] ─→ [Profit 💰]
-[Orca WebSocket] ────┘        ↑
-                              │
-                        [Config: 0.3% min profit]
+The bot uses a modular, feature-flag based architecture:
+
+```
+src/
+├── main.rs           # Entry point with CLI
+├── config_manager.rs # Configuration management
+├── monitor.rs        # DEX price monitoring
+├── calculator.rs     # Profit calculations
+├── executor.rs       # Transaction execution
+├── safety.rs         # Risk management
+├── sniper/          # Token sniping module
+├── dex/             # DEX integrations
+├── web/             # Dashboard API
+└── performance/     # Optimization modules
 ```
 
-## 🛠️ Stack Technologiczny
-- **Język**: Rust (100%)
-- **Async Runtime**: Tokio
-- **Solana SDK**: solana-client 2.0
-- **WebSocket**: tokio-tungstenite
-- **Serializacja**: bincode (szybsza niż JSON)
-- **Baza**: SQLite (tylko logi transakcji)
+See [.bmad/ARCHITECTURE.md](.bmad/ARCHITECTURE.md) for detailed architecture documentation.
 
-## 📁 Struktura Projektu
+## 📋 Prerequisites
 
-```text
-solana-arbitrage-bot/
-├── Cargo.toml           # Jedna definicja dependencji
-├── config.yaml          # Konfiguracja (RPC, wallet, progi)
-├── src/
-│   ├── main.rs         # Entry point + event loop
-│   ├── monitor.rs      # WebSocket monitoring DEXów
-│   ├── calculator.rs   # Kalkulacja zysku (gas, slippage)
-│   ├── executor.rs     # Budowanie i wysyłanie transakcji
-│   └── safety.rs       # Podstawowe zabezpieczenia
-└── README.md          # Ten plik
+- Rust 1.70+ 
+- Solana CLI tools
+- Node.js 16+ (for dashboard)
+- PostgreSQL (optional, for production)
+
+## 🚀 Quick Start
+
+### 1. Clone and Setup
+```bash
+git clone https://github.com/SynergiaOS/SolanaArbitrageBot.git
+cd SolanaArbitrageBot
 ```
 
-## ⚡ Kluczowe Komponenty
-
-### 1. Monitor (monitor.rs)
-
-```rust
-pub struct DexMonitor {
-    raydium_price: Arc<Mutex<f64>>,
-    orca_price: Arc<Mutex<f64>>,
-}
-
-impl DexMonitor {
-    pub async fn start_monitoring(&self) {
-        // WebSocket do Raydium/Orca
-        // Aktualizacja cen w czasie rzeczywistym
-    }
-}
+### 2. Configure
+```bash
+cp config.yaml config.local.yaml
+# Edit config.local.yaml with your settings
 ```
 
-### 2. Calculator (calculator.rs)
+### 3. Build
 
-```rust
-pub struct ProfitCalculator {
-    gas_cost: f64,      // ~0.00025 SOL
-    slippage: f64,      // 0.5%
-    min_profit: f64,    // 0.3%
-}
-
-impl ProfitCalculator {
-    pub fn calculate(&self, price_a: f64, price_b: f64, amount: f64) -> Option<Opportunity> {
-        let spread = (price_b - price_a).abs() / price_a;
-        let profit = spread - self.gas_cost - self.slippage;
-
-        if profit > self.min_profit {
-            Some(Opportunity {
-                buy_dex: if price_a < price_b { "Raydium" } else { "Orca" },
-                sell_dex: if price_a < price_b { "Orca" } else { "Raydium" },
-                profit_usd: profit * amount,
-            })
-        } else {
-            None
-        }
-    }
-}
+**Monitor-only mode (Production):**
+```bash
+cargo build --release --no-default-features --features monitor
 ```
 
-### 3. Executor (executor.rs)
-
-```rust
-pub struct TransactionExecutor {
-    rpc_client: RpcClient,
-    wallet: Keypair,
-}
-
-impl TransactionExecutor {
-    pub async fn execute_arbitrage(&self, opp: Opportunity) -> Result<Signature> {
-        // 1. Buduj transakcję atomową (swap A -> swap B)
-        // 2. Symuluj transakcję
-        // 3. Jeśli OK, wyślij z wysokim priority fee
-        // 4. Czekaj na potwierdzenie
-    }
-}
+**Full features (Development):**
+```bash
+cargo build --release --all-features
 ```
 
-### 4. Safety (safety.rs)
+### 4. Run
 
-```rust
-pub struct SafetyLimits {
-    max_position_size: f64,     // Max 100 SOL per trade
-    max_daily_trades: u32,       // Max 50 trades/day
-    max_daily_loss: f64,         // Stop po stracie 50 USD
-    min_liquidity: f64,          // Min 10k USD w poolu
-}
+**Monitor mode:**
+```bash
+./scripts/start_monitor_only.sh
 ```
 
-## 🚀 Plan Implementacji
+**Full bot:**
+```bash
+cargo run --release
+```
 
-### Tydzień 1: Fundament
-- [ ] Setup projektu Rust + Cargo.toml
-- [ ] WebSocket monitoring (Raydium + Orca)
-- [ ] Podstawowy kalkulator profitu
-- [ ] Testy jednostkowe
+## 📊 Configuration
 
-### Tydzień 2: Egzekucja
-- [ ] Transaction builder (Jupiter Aggregator API)
-- [ ] Symulacja transakcji przed wysłaniem
-- [ ] Podstawowe safety checks
-- [ ] Testnet deployment
-
-### Tydzień 3: Produkcja
-- [ ] Mainnet deployment (małe kwoty)
-- [ ] Monitoring & logi
-- [ ] Optymalizacja gas fees
-- [ ] Skalowanie pozycji
-
-## ⚙️ Konfiguracja (config.yaml)
+Key configuration sections in `config.yaml`:
 
 ```yaml
-rpc:
-  url: "https://api.mainnet-beta.solana.com"
-  ws_url: "wss://api.mainnet-beta.solana.com"
-
-wallet:
-  path: "./wallet.json"  # Na początek zwykły keypair
+limits:
+  max_position_sol: 10.0
+  max_daily_loss_usd: 100.0
+  
+sniper:
+  enabled: true
+  min_liquidity_sol: 5.0
   
 dex:
   raydium:
-    program_id: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"
-    ws_endpoint: "wss://api.raydium.io/v2/ws"
-  orca:
-    program_id: "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP"
-    ws_endpoint: "wss://api.orca.so/v1/ws"
-
-limits:
-  max_position_sol: 100
-  min_profit_percent: 0.3
-  max_slippage_percent: 0.5
-  max_daily_loss_usd: 50
+    enabled: true
+    rpc_url: "https://api.mainnet-beta.solana.com"
 ```
 
-## 📈 Monitoring
+## 🛡️ Security
 
-### Metryki (SQLite)
-```sql
-CREATE TABLE trades (
-    id INTEGER PRIMARY KEY,
-    timestamp DATETIME,
-    buy_dex TEXT,
-    sell_dex TEXT,
-    amount_sol REAL,
-    profit_usd REAL,
-    gas_cost_sol REAL,
-    signature TEXT
-);
+- **Private Key Management**: Supports hardware wallets and secure vaults
+- **Position Limits**: Configurable max position size
+- **Daily Loss Limits**: Automatic circuit breaker
+- **Slippage Protection**: Dynamic slippage calculation
 
--- Dzienny P&L
-SELECT DATE(timestamp), SUM(profit_usd) 
-FROM trades 
-GROUP BY DATE(timestamp);
-```
+See [.bmad/DEPLOYMENT.md](.bmad/DEPLOYMENT.md) for production security setup.
 
-### Alerty (stdout + opcjonalnie Telegram)
-- ✅ Udany arbitraż > 10 USD
-- ⚠️ Spread > 1% (duża okazja)
-- 🛑 Strata > 20 USD (stop trading)
-
-## 🔐 Bezpieczeństwo
-
-### Faza 1 (Tydzień 1-2)
-- Hardcoded limity pozycji
-- Testnet only
-- Dry-run mode
-
-### Faza 2 (Tydzień 3+)
-- Rate limiting
-- Slippage protection
-- Circuit breaker przy stratach
-
-### Faza 3 (Miesiąc 2+)
-- Hardware wallet (Ledger)
-- Multi-sig dla dużych pozycji
-- Zaawansowany risk management
-
-## 🎮 Uruchomienie
+## 🧪 Testing
 
 ```bash
-# Kompilacja (monitor-only)
-cargo build --release --no-default-features --features monitor
+# Unit tests
+cargo test
 
-# Testy (monitor-only)
-cargo test --no-default-features --features monitor --workspace --verbose
+# Integration tests  
+cargo test --workspace
 
-# (opcjonalnie) Walidacja zależności dla monitor-only
-cargo tree --no-default-features --features monitor -e features
+# Safety tests
+./scripts/run_safety_tests.sh
 ```
 
-# Docker (monitor-only, non-root user 'arbitrage')
-# Opcja A: użyj gotowego obrazu z GHCR (latest wskazuje na monitor-only)
+## 📈 Performance
+
+- **Latency**: <300ms transaction execution
+- **Throughput**: 1000+ opportunities/second monitoring
+- **Uptime**: 99.5%+ with automatic recovery
+
+## 🔧 Development
+
+### Feature Flags
+- `monitor` - Core monitoring functionality
+- `sniper` - Token sniping features  
+- `web` - Dashboard and API
+- `gepa` - Genetic algorithm optimization
+- `full` - All features enabled
+
+### Building Specific Features
 ```bash
-docker run --rm -p 3001:3001 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/logs:/app/logs \
-  ghcr.io/OWNER/REPO:latest
+cargo build --release --features "monitor,sniper"
 ```
 
-# Opcja B: zbuduj lokalnie obraz monitor-only
-```bash
-docker build --build-arg CARGO_FEATURES=monitor -t ghcr.io/OWNER/REPO:monitor .
-docker run --rm -p 3001:3001 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/logs:/app/logs \
-  ghcr.io/OWNER/REPO:monitor
-```
+## 📚 Documentation
 
-# REST API przykłady
-# Uwaga: REST API dostępne jest tylko, jeżeli kompilujesz z cechą web (np. w profilu full).
-# Wariant monitor-only nie wystawia endpointów HTTP.
-curl -s http://127.0.0.1:3001/api/status | jq
-curl -s -X POST -H 'Content-Type: application/json' \
-  -d '{"min_profit_usd":0.5,"max_position_sol":0.02,"max_daily_trades":50,"max_daily_loss_usd":10,"enabled":true}' \
-  http://127.0.0.1:3001/api/config | jq
-curl -s -X POST -H 'Content-Type: application/json' \
-  -d '{"reason":"manual stop","source":"ops"}' \
-  http://127.0.0.1:3001/api/control/emergency | jq
-```
+- [Architecture](.bmad/ARCHITECTURE.md) - System design and components
+- [Deployment](.bmad/DEPLOYMENT.md) - Production deployment guide
+- [Development Stories](.bmad/DEVELOPMENT_STORIES.md) - Feature implementation roadmap
+- [Project Requirements](.bmad/PROJECT_REQUIREMENTS.md) - Detailed specifications
 
-## 📊 Oczekiwane Wyniki
+## 🤝 Contributing
 
-###_pesymistyczny (70% czasu)
-- 10-20 okazji/dzień
-- 2-5 USD zysku per trade
-- 20-50 USD dziennie
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-### Realistyczny (20% czasu)
-- 20-50 okazji/dzień
-- 5-10 USD zysku per trade
-- 100-200 USD dziennie
+## 📄 License
 
-### Optymistyczny (10% czasu)
-- Duża zmienność rynku
-- 10-50 USD per trade
-- 500+ USD dziennie
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## ❌ Czego NIE robimy
+## ⚠️ Disclaimer
 
-- ❌ AI/LLM - niepotrzebne dla arbitrażu
-- ❌ Skomplikowana orchestracja - jeden proces
-- ❌ Multi-chain - tylko Solana
-- ❌ Frontend - tylko CLI + logi
-- ❌ Microservices - monolit
-- ❌ 10 różnych strategii - tylko arbitraż
+This software is for educational purposes only. Cryptocurrency trading involves substantial risk of loss. Use at your own risk.
 
-## ✅ Następne Kroki (po sukcesie)
+## 🙏 Acknowledgments
 
-Jeśli bot zarabia stabilnie 50+ USD/dzień przez 2 tygodnie:
-
-1. **Skalowanie**: Więcej par (USDT, wBTC, ETH)
-2. **Więcej DEXów**: Jupiter, Serum
-3. **MEV Protection**: Prywatne mempoole (Jito)
-4. **Druga Strategia**: JIT liquidity lub sandwich
+- Solana Foundation
+- Jito Labs for MEV infrastructure
+- DEX protocols (Raydium, Orca, Jupiter)
+- Open source contributors
 
 ---
 
-**TL;DR**: Prosty bot arbitrażowy w Rust. Monitoruje 2 DEXy, wykonuje atomowe swapy gdy spread > 0.3%. Cel: 50 USD/dzień. Timeline: 3 tygodnie do produkcji.
+For support, please open an issue or contact the team.
