@@ -7,7 +7,8 @@ use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
 use rust_decimal::Decimal;
-use solana_client::rpc_client::RpcClient;
+use rust_decimal::prelude::ToPrimitive;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::signature::{Signer, Signature}; // Add missing Signature import
 use solana_sdk::{
     instruction::Instruction,

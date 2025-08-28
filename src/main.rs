@@ -1,51 +1,8 @@
 //! Solana Arbitrage Bot - Main Entry Point
 //! Real-time arbitrage trading with Jupiter integration
-
-use anyhow::Result;
 use clap::Parser;
-use log::{error, info, warn};
-use rust_decimal::Decimal;
-use solana_arbitrage_bot::utils::conversions::*;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use tokio::time::{sleep, Duration};
-use uuid;
 
-// Import from lib
-use solana_arbitrage_bot::*;
-
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    /// Run in dry-run mode (no real transactions)
-    #[arg(long, default_value_t = false)]
-    dry_run: bool,
-
-    /// Network to use (mainnet, testnet, devnet)
-    #[arg(long, default_value = "mainnet")]
-    network: String,
-
-    /// Path to config file
-    #[arg(long, default_value = "./config.yaml")]
-    config: String,
-
-    /// Maximum position size in SOL (overrides config)
-    #[arg(long)]
-    max_position: Option<f64>,
-
-    /// Test Ledger connection and exit
-    #[arg(long, default_value_t = false)]
-    test_ledger: bool,
-
-    /// Ledger derivation path for testing
-    #[arg(long, default_value = "m/44'/501'/0'/0'")]
-    ledger_path: String,
-
-    /// Test real API connections and exit
-    #[arg(long, default_value_t = false)]
-    test_apis: bool,
-}
-
+#[cfg(feature = "full")]
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize logger
@@ -554,6 +511,7 @@ async fn main() -> Result<()> {
     }
 }
 
+#[cfg(feature = "full")]
 async fn test_api_connections() -> Result<()> {
     info!("Testing Solana RPC...");
     let client = solana_client::rpc_client::RpcClient::new("https://api.mainnet-beta.solana.com");
@@ -584,6 +542,7 @@ async fn test_api_connections() -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "full")]
 fn load_config(path: &str) -> Result<Config> {
     let settings = config::Config::builder()
         .add_source(config::File::with_name(path))
@@ -596,4 +555,41 @@ fn load_config(path: &str) -> Result<Config> {
         .build()?;
 
     Ok(settings.try_deserialize()?)
+}
+
+#[cfg(all(feature = "monitor", not(feature = "full")))]
+#[derive(clap::Parser, Debug)]
+struct Args {
+    /// Run in dry-run mode (no real transactions)
+    #[arg(long, default_value_t = false)]
+    dry_run: bool,
+
+    /// Network to use (mainnet, testnet, devnet)
+    #[arg(long, default_value = "mainnet")]
+    network: String,
+
+    /// Path to config file
+    #[arg(long, default_value = "./config.yaml")]
+    config: String,
+}
+
+#[cfg(all(feature = "monitor", not(feature = "full")))]
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    env_logger::init();
+    let args = Args::parse();
+    log::info!("🚀 Starting Solana Arbitrage Bot (monitor-only) on {}", args.network);
+
+    // Wczytaj konfigurację; fallback do domyślnej jeśli plik niepoprawny/nieistnieje
+    let cfg = if std::path::Path::new(&args.config).exists() {
+        solana_arbitrage_bot::config_manager::BotConfig::from_file(&args.config)
+            .unwrap_or_else(|_| solana_arbitrage_bot::config_manager::BotConfig::default())
+    } else {
+        solana_arbitrage_bot::config_manager::BotConfig::default()
+    };
+
+    let monitor = solana_arbitrage_bot::monitor::DexMonitor::new(&cfg);
+    log::info!("💰 Starting arbitrage loop...");
+    monitor.start_monitoring().await?;
+    Ok(())
 }

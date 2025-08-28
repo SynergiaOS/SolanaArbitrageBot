@@ -5,6 +5,7 @@
 pub mod calculator;
 pub mod config_manager;
 pub mod utils;
+pub mod dex;
 
 // Re-export config structures for external use
 pub use config_manager::{
@@ -35,6 +36,9 @@ pub mod ledger;
 
 #[cfg(any(feature = "monitor", feature = "full"))]
 pub mod monitor;
+
+#[cfg(any(feature = "monitor", feature = "full"))]
+pub mod monitor_v2;
 
 #[cfg(any(feature = "monitor", feature = "full"))]
 pub mod post_trade_monitor;

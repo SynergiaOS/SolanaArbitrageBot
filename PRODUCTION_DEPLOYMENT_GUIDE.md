@@ -27,6 +27,22 @@
 - **Position Size**: $5-25 per trade
 - **Success Criteria**: 20%+ monthly ROI
 
+## 🧩 Build profiles i cechy (monitor-only jako profil produkcyjny)
+W produkcji wspieramy stabilny profil monitor-only. Kompilacja, testy i walidacja zależności:
+
+```bash
+# Kompilacja monitor-only
+cargo build --release --no-default-features --features monitor
+
+# Testy monitor-only
+cargo test --no-default-features --features monitor --workspace --verbose
+
+# Walidacja bramek zależności (powinna być pusta dla ciężkich bibliotek)
+cargo tree --no-default-features --features monitor -e features
+```
+
+Uwaga dotycząca API: REST/HTTP endpointy są dostępne tylko w buildzie z cechą web (np. w profilu full). Wariant monitor-only nie wystawia endpointów HTTP.
+
 ## 🛡️ Risk Management Framework
 
 ### Position Sizing Rules
@@ -95,6 +111,38 @@ Monthly ROI: 100-200%
 - **Backup RPC**: Secondary endpoint for failover
 - **WebSocket**: Stable connection for real-time data
 - **Monitoring**: External monitoring service
+
+## 📦 Deployment kontenerowy (monitor-only, GHCR)
+Rekomendowany sposób uruchomienia w produkcji to obraz monitor-only publikowany do GHCR:
+
+- ghcr.io/OWNER/REPO:latest — wskazuje na monitor-only
+- ghcr.io/OWNER/REPO:monitor — jawny tag monitor-only
+- ghcr.io/OWNER/REPO:SHA-monitor — tag z SHA commita
+
+Przykładowe uruchomienie:
+
+```bash
+# Uruchom wariant monitor-only z GHCR (latest lub :monitor)
+docker run --rm -p 3001:3001 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/logs:/app/logs \
+  ghcr.io/OWNER/REPO:latest
+```
+
+Budowa obrazu lokalnie (gdy potrzebne):
+
+```bash
+docker build --build-arg CARGO_FEATURES=monitor -t ghcr.io/OWNER/REPO:monitor .
+docker run --rm -p 3001:3001 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/logs:/app/logs \
+  ghcr.io/OWNER/REPO:monitor
+```
+
+Notatki operacyjne:
+- Obraz działa z nieuprzywilejowanym użytkownikiem arbitrage.
+- Zmienna środowiskowa RUST_LOG=info jest ustawiona w kontenerze.
+- Jeśli potrzebujesz HTTP API, zbuduj obraz z cechą web (niezalecane dla monitor-only) i wystaw port zgodnie z konfiguracją.
 
 ## 📊 Monitoring & Alerting
 

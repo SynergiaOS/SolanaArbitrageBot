@@ -211,19 +211,37 @@ GROUP BY DATE(timestamp);
 ## 🎮 Uruchomienie
 
 ```bash
-# Kompilacja
-cargo build --release
+# Kompilacja (monitor-only)
+cargo build --release --no-default-features --features monitor
 
-# Testy (lokalne)
-cargo test
-# Testy sieciowe (opcjonalne, zewnętrzne API) – uruchom ręcznie:
-cargo test --test integration -- --ignored --nocapture
+# Testy (monitor-only)
+cargo test --no-default-features --features monitor --workspace --verbose
 
-# Docker (produkcja, non-root user 'arbitrage')
-docker build -t solana-arb-bot:prod .
-docker run --rm -p 3001:3001 -v $(pwd)/data:/app/data -v $(pwd)/logs:/app/logs solana-arb-bot:prod
+# (opcjonalnie) Walidacja zależności dla monitor-only
+cargo tree --no-default-features --features monitor -e features
+```
+
+# Docker (monitor-only, non-root user 'arbitrage')
+# Opcja A: użyj gotowego obrazu z GHCR (latest wskazuje na monitor-only)
+```bash
+docker run --rm -p 3001:3001 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/logs:/app/logs \
+  ghcr.io/OWNER/REPO:latest
+```
+
+# Opcja B: zbuduj lokalnie obraz monitor-only
+```bash
+docker build --build-arg CARGO_FEATURES=monitor -t ghcr.io/OWNER/REPO:monitor .
+docker run --rm -p 3001:3001 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/logs:/app/logs \
+  ghcr.io/OWNER/REPO:monitor
+```
 
 # REST API przykłady
+# Uwaga: REST API dostępne jest tylko, jeżeli kompilujesz z cechą web (np. w profilu full).
+# Wariant monitor-only nie wystawia endpointów HTTP.
 curl -s http://127.0.0.1:3001/api/status | jq
 curl -s -X POST -H 'Content-Type: application/json' \
   -d '{"min_profit_usd":0.5,"max_position_sol":0.02,"max_daily_trades":50,"max_daily_loss_usd":10,"enabled":true}' \
@@ -235,7 +253,7 @@ curl -s -X POST -H 'Content-Type: application/json' \
 
 ## 📊 Oczekiwane Wyniki
 
-### Pesymistyczny (70% czasu)
+###_pesymistyczny (70% czasu)
 - 10-20 okazji/dzień
 - 2-5 USD zysku per trade
 - 20-50 USD dziennie

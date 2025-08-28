@@ -1,436 +1,204 @@
-use anyhow::{anyhow, Result};
-use log::{debug, info, warn};
-use solana_client::rpc_client::RpcClient;
-use solana_sdk::commitment_config::CommitmentConfig;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+//! Connection Pool Manager - Optimized for low latency
+//! Manages multiple RPC connections with automatic failover
+
+use anyhow::Result;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{RwLock, Semaphore};
-
-/// High-performance RPC connection pool with load balancing
-pub struct RpcConnectionPool {
-    connections: Arc<RwLock<Vec<PooledConnection>>>,
-    semaphore: Arc<Semaphore>,
-    config: PoolConfig,
-    stats: Arc<PoolStats>,
-    health_checker: Arc<HealthChecker>,
-}
+use tokio::sync::RwLock;
+use log::{info, warn, error};
 
 #[derive(Clone)]
-pub struct PoolConfig {
-    pub max_connections: usize,
-    pub min_connections: usize,
-    pub connection_timeout: Duration,
-    pub idle_timeout: Duration,
-    pub health_check_interval: Duration,
-    pub max_retries: u32,
-    pub retry_delay: Duration,
-    pub primary_rpc_url: String,
-    pub backup_rpc_urls: Vec<String>,
-}
-
-impl Default for PoolConfig {
-    fn default() -> Self {
-        Self {
-            max_connections: 20,
-            min_connections: 5,
-            connection_timeout: Duration::from_secs(10),
-            idle_timeout: Duration::from_secs(300), // 5 minutes
-            health_check_interval: Duration::from_secs(30),
-            max_retries: 3,
-            retry_delay: Duration::from_millis(100),
-            primary_rpc_url: "https://api.mainnet-beta.solana.com".to_string(),
-            backup_rpc_urls: vec![
-                "https://solana-api.projectserum.com".to_string(),
-                "https://api.mainnet-beta.solana.com".to_string(),
-            ],
-        }
-    }
-}
-
-#[derive(Clone)]
-struct PooledConnection {
-    client: Arc<RpcClient>,
-    created_at: Instant,
-    last_used: Instant,
-    request_count: u64,
-    error_count: u64,
-    is_healthy: bool,
-    endpoint_url: String,
-}
-
-impl PooledConnection {
-    fn new(url: &str) -> Self {
-        let client = Arc::new(RpcClient::new_with_commitment(
-            url.to_string(),
-            CommitmentConfig::confirmed(),
-        ));
-
-        Self {
-            client,
-            created_at: Instant::now(),
-            last_used: Instant::now(),
-            request_count: 0,
-            error_count: 0,
-            is_healthy: true,
-            endpoint_url: url.to_string(),
-        }
-    }
-
-    fn is_expired(&self, idle_timeout: Duration) -> bool {
-        self.last_used.elapsed() > idle_timeout
-    }
-
-    fn update_usage(&mut self, success: bool) {
-        self.last_used = Instant::now();
-        self.request_count += 1;
-        if !success {
-            self.error_count += 1;
-        }
-        
-        // Mark as unhealthy if error rate > 50%
-        if self.request_count > 10 {
-            let error_rate = self.error_count as f64 / self.request_count as f64;
-            self.is_healthy = error_rate < 0.5;
-        }
-    }
+pub struct ConnectionPool {
+    /// Primary RPC connections
+    primary_pool: Arc<Vec<Arc<RpcClient>>>,
+    /// Backup RPC connections
+    backup_pool: Arc<Vec<Arc<RpcClient>>>,
+    /// Current connection index for round-robin
+    current_index: Arc<RwLock<usize>>,
+    /// Health status of connections
+    health_status: Arc<RwLock<Vec<(bool, Instant)>>>,
+    /// Metrics
+    metrics: Arc<RwLock<ConnectionMetrics>>,
 }
 
 #[derive(Default)]
-pub struct PoolStats {
-    pub total_requests: AtomicU64,
-    pub successful_requests: AtomicU64,
-    pub failed_requests: AtomicU64,
-    pub active_connections: AtomicUsize,
-    pub total_connections_created: AtomicU64,
-    pub average_response_time_ms: AtomicU64,
-    pub pool_hits: AtomicU64,
-    pub pool_misses: AtomicU64,
+struct ConnectionMetrics {
+    total_requests: u64,
+    failed_requests: u64,
+    avg_latency_ms: f64,
+    last_health_check: Instant,
 }
 
-impl PoolStats {
-    pub fn record_request(&self, success: bool, response_time: Duration) {
-        self.total_requests.fetch_add(1, Ordering::Relaxed);
+impl ConnectionPool {
+    pub fn new(urls: Vec<String>, backup_urls: Vec<String>) -> Result<Self> {
+        let primary_pool: Vec<Arc<RpcClient>> = urls
+            .iter()
+            .map(|url| Arc::new(RpcClient::new(url.clone())))
+            .collect();
+
+        let backup_pool: Vec<Arc<RpcClient>> = backup_urls
+            .iter()
+            .map(|url| Arc::new(RpcClient::new(url.clone())))
+            .collect();
+
+        let health_status = vec![(true, Instant::now()); primary_pool.len()];
+
+        Ok(Self {
+            primary_pool: Arc::new(primary_pool),
+            backup_pool: Arc::new(backup_pool),
+            current_index: Arc::new(RwLock::new(0)),
+            health_status: Arc::new(RwLock::new(health_status)),
+            metrics: Arc::new(RwLock::new(ConnectionMetrics::default())),
+        })
+    }
+
+    /// Get the fastest available RPC connection
+    pub async fn get_fastest_client(&self) -> Arc<RpcClient> {
+        let health_status = self.health_status.read().await;
         
-        if success {
-            self.successful_requests.fetch_add(1, Ordering::Relaxed);
-        } else {
-            self.failed_requests.fetch_add(1, Ordering::Relaxed);
+        // Find healthy connections
+        let healthy_indices: Vec<usize> = health_status
+            .iter()
+            .enumerate()
+            .filter(|(_, (healthy, _))| *healthy)
+            .map(|(i, _)| i)
+            .collect();
+
+        if healthy_indices.is_empty() {
+            warn!("No healthy primary connections, using backup");
+            return self.backup_pool[0].clone();
         }
 
-        // Update average response time (simple moving average)
-        let current_avg = self.average_response_time_ms.load(Ordering::Relaxed);
-        let new_time = response_time.as_millis() as u64;
-        let new_avg = (current_avg + new_time) / 2;
-        self.average_response_time_ms.store(new_avg, Ordering::Relaxed);
+        // Round-robin among healthy connections
+        let mut index = self.current_index.write().await;
+        *index = (*index + 1) % healthy_indices.len();
+        
+        self.primary_pool[healthy_indices[*index]].clone()
     }
 
-    pub fn get_success_rate(&self) -> f64 {
-        let total = self.total_requests.load(Ordering::Relaxed);
-        if total == 0 {
-            return 100.0;
+    /// Execute request with automatic retry and failover
+    pub async fn execute_with_retry<T, F, Fut>(
+        &self,
+        operation: F,
+        max_retries: u32,
+    ) -> Result<T>
+    where
+        F: Fn(Arc<RpcClient>) -> Fut,
+        Fut: std::future::Future<Output = Result<T>>,
+    {
+        let mut last_error = None;
+        
+        // Try primary pool
+        for _ in 0..max_retries {
+            let client = self.get_fastest_client().await;
+            let start = Instant::now();
+            
+            match operation(client.clone()).await {
+                Ok(result) => {
+                    // Update metrics
+                    let mut metrics = self.metrics.write().await;
+                    metrics.total_requests += 1;
+                    let latency = start.elapsed().as_millis() as f64;
+                    metrics.avg_latency_ms = 
+                        (metrics.avg_latency_ms * metrics.total_requests as f64 + latency) 
+                        / (metrics.total_requests + 1) as f64;
+                    
+                    return Ok(result);
+                }
+                Err(e) => {
+                    warn!("Request failed: {}", e);
+                    last_error = Some(e);
+                    
+                    // Mark connection as unhealthy
+                    self.mark_unhealthy(client).await;
+                }
+            }
         }
-        let successful = self.successful_requests.load(Ordering::Relaxed);
-        (successful as f64 / total as f64) * 100.0
-    }
-}
 
-struct HealthChecker {
-    pool: Arc<RwLock<Vec<PooledConnection>>>,
-    config: PoolConfig,
-}
+        // Try backup pool if all primary failed
+        for backup_client in self.backup_pool.iter() {
+            match operation(backup_client.clone()).await {
+                Ok(result) => return Ok(result),
+                Err(e) => last_error = Some(e),
+            }
+        }
 
-impl HealthChecker {
-    fn new(pool: Arc<RwLock<Vec<PooledConnection>>>, config: PoolConfig) -> Self {
-        Self { pool, config }
+        Err(last_error.unwrap_or_else(|| anyhow::anyhow!("All connections failed")))
     }
 
-    async fn start_health_checks(&self) {
-        let mut interval = tokio::time::interval(self.config.health_check_interval);
-        let pool = self.pool.clone();
-        let config = self.config.clone();
+    /// Mark a connection as unhealthy
+    async fn mark_unhealthy(&self, client: Arc<RpcClient>) {
+        let mut health_status = self.health_status.write().await;
+        
+        // Find the index of this client
+        for (i, primary_client) in self.primary_pool.iter().enumerate() {
+            if Arc::ptr_eq(primary_client, &client) {
+                health_status[i] = (false, Instant::now());
+                warn!("Marked connection {} as unhealthy", i);
+                break;
+            }
+        }
+    }
 
+    /// Health check task - run in background
+    pub async fn start_health_check(&self) {
+        let pool = self.clone();
         tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(10));
+            
             loop {
                 interval.tick().await;
-                Self::perform_health_check(&pool, &config).await;
+                pool.check_health().await;
             }
         });
     }
 
-    async fn perform_health_check(
-        pool: &Arc<RwLock<Vec<PooledConnection>>>,
-        config: &PoolConfig,
-    ) {
-        let mut connections = pool.write().await;
-        let mut healthy_count = 0;
-        let mut removed_count = 0;
-
-        // Check each connection
-        for i in (0..connections.len()).rev() {
-            let conn = &mut connections[i];
-            
-            // Remove expired connections
-            if conn.is_expired(config.idle_timeout) {
-                connections.remove(i);
-                removed_count += 1;
-                continue;
-            }
-
-            // Test connection health
-            match Self::test_connection_health(&conn.client).await {
+    async fn check_health(&self) {
+        let mut health_status = self.health_status.write().await;
+        
+        for (i, client) in self.primary_pool.iter().enumerate() {
+            let start = Instant::now();
+            match client.get_slot().await {
                 Ok(_) => {
-                    conn.is_healthy = true;
-                    healthy_count += 1;
+                    let latency = start.elapsed().as_millis();
+                    if latency < 200 {
+                        health_status[i] = (true, Instant::now());
+                        info!("Connection {} healthy ({}ms)", i, latency);
+                    }
                 }
                 Err(_) => {
-                    conn.is_healthy = false;
-                    // Remove unhealthy connections
-                    connections.remove(i);
-                    removed_count += 1;
+                    health_status[i] = (false, Instant::now());
+                    warn!("Connection {} unhealthy", i);
                 }
             }
         }
-
-        if removed_count > 0 {
-            debug!("🧹 Removed {} expired/unhealthy connections", removed_count);
-        }
-
-        // Ensure minimum connections
-        while connections.len() < config.min_connections {
-            if let Ok(new_conn) = Self::create_new_connection(config).await {
-                connections.push(new_conn);
-                debug!("➕ Added new connection to maintain minimum pool size");
-            } else {
-                warn!("Failed to create new connection for minimum pool size");
-                break;
-            }
-        }
-
-        debug!("🏥 Health check: {} healthy connections", healthy_count);
     }
 
-    async fn test_connection_health(client: &RpcClient) -> Result<()> {
-        // Quick health check - get slot
-        let _slot = client.get_slot()?;
-        Ok(())
-    }
-
-    async fn create_new_connection(config: &PoolConfig) -> Result<PooledConnection> {
-        // Try primary first, then backups
-        let urls = std::iter::once(&config.primary_rpc_url)
-            .chain(config.backup_rpc_urls.iter());
-
-        for url in urls {
-            match Self::test_url_connection(url).await {
-                Ok(_) => {
-                    debug!("✅ Created new connection to {}", url);
-                    return Ok(PooledConnection::new(url));
-                }
-                Err(e) => {
-                    debug!("❌ Failed to connect to {}: {}", url, e);
-                }
-            }
-        }
-
-        Err(anyhow!("Failed to create connection to any RPC endpoint"))
-    }
-
-    async fn test_url_connection(url: &str) -> Result<()> {
-        let client = RpcClient::new_with_commitment(
-            url.to_string(),
-            CommitmentConfig::confirmed(),
-        );
-
-        let _slot = client.get_slot()?;
-        Ok(())
+    /// Get connection metrics
+    pub async fn get_metrics(&self) -> String {
+        let metrics = self.metrics.read().await;
+        format!(
+            "Total requests: {}, Failed: {}, Avg latency: {:.2}ms",
+            metrics.total_requests,
+            metrics.failed_requests,
+            metrics.avg_latency_ms
+        )
     }
 }
 
-impl RpcConnectionPool {
-    pub async fn new(config: PoolConfig) -> Result<Self> {
-        let connections = Arc::new(RwLock::new(Vec::new()));
-        let semaphore = Arc::new(Semaphore::new(config.max_connections));
-        let stats = Arc::new(PoolStats::default());
-        let health_checker = Arc::new(HealthChecker::new(connections.clone(), config.clone()));
-
-        let pool = Self {
-            connections: connections.clone(),
-            semaphore,
-            config: config.clone(),
-            stats,
-            health_checker,
-        };
-
-        // Initialize minimum connections
-        pool.initialize_connections().await?;
-
-        // Start health checking
-        pool.health_checker.start_health_checks().await;
-
-        info!("🏊 RPC Connection Pool initialized with {} connections", config.min_connections);
-        Ok(pool)
-    }
-
-    async fn initialize_connections(&self) -> Result<()> {
-        let mut connections = self.connections.write().await;
-        
-        for _ in 0..self.config.min_connections {
-            match HealthChecker::create_new_connection(&self.config).await {
-                Ok(conn) => {
-                    connections.push(conn);
-                    self.stats.total_connections_created.fetch_add(1, Ordering::Relaxed);
-                }
-                Err(e) => {
-                    warn!("Failed to create initial connection: {}", e);
-                }
-            }
-        }
-
-        if connections.is_empty() {
-            return Err(anyhow!("Failed to create any initial connections"));
-        }
-
-        Ok(())
-    }
-
-    /// Get a connection from the pool with load balancing
-    pub async fn get_connection(&self) -> Result<PooledRpcClient> {
-        // Acquire semaphore permit
-        let _permit = self.semaphore.acquire().await?;
-
-        let start_time = Instant::now();
-        
-        // Try to get existing healthy connection
-        if let Some(conn) = self.get_healthy_connection().await {
-            self.stats.pool_hits.fetch_add(1, Ordering::Relaxed);
-            return Ok(PooledRpcClient::new(conn, self.stats.clone()));
-        }
-
-        // No healthy connection available, create new one
-        self.stats.pool_misses.fetch_add(1, Ordering::Relaxed);
-        
-        let new_conn = HealthChecker::create_new_connection(&self.config).await?;
-        self.stats.total_connections_created.fetch_add(1, Ordering::Relaxed);
-        
-        // Add to pool if there's space
-        let mut connections = self.connections.write().await;
-        if connections.len() < self.config.max_connections {
-            connections.push(new_conn.clone());
-        }
-
-        debug!("🆕 Created new connection in {}ms", start_time.elapsed().as_millis());
-        Ok(PooledRpcClient::new(Arc::new(new_conn), self.stats.clone()))
-    }
-
-    async fn get_healthy_connection(&self) -> Option<Arc<PooledConnection>> {
-        let connections = self.connections.read().await;
-        
-        // Find the least used healthy connection
-        connections
-            .iter()
-            .filter(|conn| conn.is_healthy)
-            .min_by_key(|conn| conn.request_count)
-            .cloned()
-            .map(|conn| Arc::new(conn))
-    }
-
-    /// Execute operation with automatic retry and failover
-    pub async fn execute_with_retry<F, T>(&self, operation: F) -> Result<T>
-    where
-        F: Fn(Arc<RpcClient>) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T>> + Send>> + Send + Sync,
-        T: Send,
-    {
-        let mut last_error = None;
-        
-        for attempt in 1..=self.config.max_retries {
-            let start_time = Instant::now();
-            
-            match self.get_connection().await {
-                Ok(pooled_client) => {
-                    match operation(pooled_client.client.clone()).await {
-                        Ok(result) => {
-                            self.stats.record_request(true, start_time.elapsed());
-                            return Ok(result);
-                        }
-                        Err(e) => {
-                            self.stats.record_request(false, start_time.elapsed());
-                            last_error = Some(e);
-                            
-                            if attempt < self.config.max_retries {
-                                let delay = self.config.retry_delay * attempt;
-                                debug!("🔄 Retry {}/{} in {:?}", attempt, self.config.max_retries, delay);
-                                tokio::time::sleep(delay).await;
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    last_error = Some(e);
-                    if attempt < self.config.max_retries {
-                        tokio::time::sleep(self.config.retry_delay).await;
-                    }
-                }
-            }
-        }
-
-        Err(last_error.unwrap_or_else(|| anyhow!("All retry attempts failed")))
-    }
-
-    /// Get pool statistics
-    pub fn get_stats(&self) -> PoolStatsSnapshot {
-        PoolStatsSnapshot {
-            total_requests: self.stats.total_requests.load(Ordering::Relaxed),
-            successful_requests: self.stats.successful_requests.load(Ordering::Relaxed),
-            failed_requests: self.stats.failed_requests.load(Ordering::Relaxed),
-            success_rate: self.stats.get_success_rate(),
-            active_connections: self.stats.active_connections.load(Ordering::Relaxed),
-            total_connections_created: self.stats.total_connections_created.load(Ordering::Relaxed),
-            average_response_time_ms: self.stats.average_response_time_ms.load(Ordering::Relaxed),
-            pool_hit_rate: {
-                let hits = self.stats.pool_hits.load(Ordering::Relaxed);
-                let misses = self.stats.pool_misses.load(Ordering::Relaxed);
-                if hits + misses > 0 {
-                    (hits as f64 / (hits + misses) as f64) * 100.0
-                } else {
-                    0.0
-                }
-            },
-        }
-    }
-}
-
-/// Wrapper for pooled RPC client with automatic stats tracking
-pub struct PooledRpcClient {
-    pub client: Arc<RpcClient>,
-    stats: Arc<PoolStats>,
-}
-
-impl PooledRpcClient {
-    fn new(connection: Arc<PooledConnection>, stats: Arc<PoolStats>) -> Self {
-        stats.active_connections.fetch_add(1, Ordering::Relaxed);
-        
-        Self {
-            client: connection.client.clone(),
-            stats,
-        }
-    }
-}
-
-impl Drop for PooledRpcClient {
-    fn drop(&mut self) {
-        self.stats.active_connections.fetch_sub(1, Ordering::Relaxed);
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct PoolStatsSnapshot {
-    pub total_requests: u64,
-    pub successful_requests: u64,
-    pub failed_requests: u64,
-    pub success_rate: f64,
-    pub active_connections: usize,
-    pub total_connections_created: u64,
-    pub average_response_time_ms: u64,
-    pub pool_hit_rate: f64,
+/// Pre-configured connection pool for production
+pub fn create_production_pool() -> Result<ConnectionPool> {
+    let urls = vec![
+        "https://api.mainnet-beta.solana.com".to_string(),
+        "https://solana-mainnet.g.alchemy.com/v2/demo".to_string(),
+        "https://rpc.ankr.com/solana".to_string(),
+    ];
+    
+    let backup_urls = vec![
+        "https://solana-api.projectserum.com".to_string(),
+        "https://api.devnet.solana.com".to_string(), // Fallback to devnet for testing
+    ];
+    
+    ConnectionPool::new(urls, backup_urls)
 }

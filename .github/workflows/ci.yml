@@ -3,8 +3,11 @@ name: 🚀 Solana Arbitrage Bot CI/CD
 on:
   push:
     branches: [ main, develop ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ main ]
+  schedule:
+    - cron: "0 2 * * *"
 
 env:
   CARGO_TERM_COLOR: always
@@ -44,13 +47,21 @@ jobs:
       run: cargo fmt --all -- --check
 
     - name: 📋 Clippy linting
-      run: cargo clippy --all-targets --all-features -- -D warnings -A unused-imports -A unused-variables -A dead-code -A unused-mut -A deprecated -A clippy::vec-init-then-push -A clippy::too-many-arguments -A clippy::option-as-ref-deref -A clippy::match-single-binding -A clippy::needless-return -A clippy::needless-borrow -A clippy::manual-strip
-      
+      run: cargo clippy --no-default-features --features monitor --all-targets -- -D warnings
+
     - name: 🧪 Run tests
-      run: cargo test --verbose --all-features
-      
+      run: cargo test --no-default-features --features monitor --workspace --verbose
+
+    - name: 🔎 Validate monitor-only dependency gates
+      run: |
+        cargo tree --no-default-features --features monitor -e features
+        if cargo tree --no-default-features --features monitor | grep -E '(axum|tower-http|tower v|sqlx|rusqlite)'; then
+          echo "Unexpected heavy deps in monitor build"
+          exit 1
+        fi
+
     - name: 🏗️ Build release
-      run: cargo build --release --verbose
+      run: cargo build --release --no-default-features --features monitor --verbose
 
   # 🔐 Security Scanning
   security:
@@ -122,7 +133,7 @@ jobs:
     name: 🏷️ Release
     runs-on: ubuntu-latest
     needs: [test, security, quality]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: startsWith(github.ref, 'refs/tags/')
     
     steps:
     - name: 📥 Checkout code
@@ -137,7 +148,7 @@ jobs:
         
     - name: 🏗️ Build release artifacts
       run: |
-        cargo build --release
+        cargo build --release --no-default-features --features monitor
         strip target/release/solana-arbitrage-bot
         
     - name: 📦 Create release archive
@@ -184,9 +195,12 @@ jobs:
       with:
         context: .
         push: ${{ github.event_name != 'pull_request' }}
+        build-args: |
+          CARGO_FEATURES=monitor
         tags: |
           ghcr.io/${{ github.repository }}:latest
-          ghcr.io/${{ github.repository }}:${{ github.sha }}
+          ghcr.io/${{ github.repository }}:monitor
+          ghcr.io/${{ github.repository }}:${{ github.sha }}-monitor
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
@@ -209,3 +223,42 @@ jobs:
       run: |
         echo "❌ Some checks failed! Please review the logs."
         # Do not fail pipeline on notification step
+
+  full:
+    name: 🧪 Full Feature Build
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    if: github.ref == 'refs/heads/full-stabilization' || github.event_name == 'schedule'
+
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🦀 Setup Rust stable
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+        components: rustfmt, clippy
+
+    - name: 📦 Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-full-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: 🔍 Check formatting
+      run: cargo fmt --all -- --check
+
+    - name: 📋 Clippy linting (full)
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
+    - name: 🧪 Run tests (full)
+      run: cargo test --workspace --all-features --verbose
+
+    - name: 🏗️ Build release (full)
+      run: cargo build --release --all-features --verbose

@@ -1,95 +1,216 @@
-# Memecoin Sniper Bot Configuration - MAINNET
-# Czysta, bezpieczna konfiguracja dedykowana wyłącznie dla sniper bota
-# Sekcje: rpc, wallet, sniper, safety, risk, monitoring, discord
+# Solana Arbitrage Bot Configuration
+# Last updated: 2025-01-01
 
-
+# RPC Configuration
 rpc:
-  url: "https://api.mainnet-beta.solana.com"
-  ws_url: "wss://api.mainnet-beta.solana.com"
-  backup_url: "https://mainnet.helius-rpc.com"
-
+  primary:
+    url: "https://api.mainnet-beta.solana.com"
+    ws_url: "wss://api.mainnet-beta.solana.com"
+  backup:
+    url: "https://solana-mainnet.g.alchemy.com/v2/YOUR_API_KEY"
+    ws_url: "wss://solana-mainnet.g.alchemy.com/v2/YOUR_API_KEY"
+  helius:  # Premium RPC for low latency
+    url: "https://mainnet.helius-rpc.com/?api-key=YOUR_API_KEY"
+  
+# Wallet Configuration  
 wallet:
-  path: "./wallet.json"                            # Backup - NIE UŻYWAĆ!
-  use_ledger: false                                # TYMCZASOWO: hot wallet dla testów
-  ledger_path: "44'/501'/0'/0'"                   # Derivation path
-  ledger_address: "9PdJZJh33TsMB6s3DuhSXYCSpUiM3oBqyuno2aLvYTk"  # AKTYWNY adres Ledger (0.18992 SOL)
-
-# --- Ustawienia Sniper Bota (handel i wykonanie) ---
-sniper:
-  max_position_sol: 0.02                           # Maks. SOL na jeden snipe (bezpiecznie na start)
-  scan_interval_ms: 250                             # Częstotliwość skanowania (ms)
-  max_slippage_bps: 150                             # Maks. slippage 1.5% (150 bps)
-  priority_fee_lamports: 100000                     # Opłata priorytetowa (przyspiesza transakcje)
-  profit_target_percent: 200.0                      # Take profit przy +200% (x3)
-  stop_loss_percent: 50.0                           # Stop loss przy -50%
-
-# --- Zasady bezpieczeństwa (filtry i weryfikacje) ---
-safety:
-  enable_safety_checks: true                        # Globalny włącznik filtrów bezpieczeństwa
-  min_liquidity_sol: 3.0                            # Minimalna płynność w poolu (SOL)
-  max_market_cap_usd: 100000.0                      # Maks. market cap tokena w USD
-  max_buy_tax_percent: 5.0                          # Maks. podatek kupna (procent)
-  max_sell_tax_percent: 5.0                         # Maks. podatek sprzedaży (procent)
-  max_dev_percentage: 30.0                          # Maks. % tokenów w rękach deva
-  min_holders: 10                                   # Min. liczba holderów
-  max_token_age_minutes: 8                          # Snajpuj tylko tokeny < 8 min od startu
-  blacklist_keywords: ["test", "fake", "scam", "rug", "honeypot"]  # Słowa kluczowe do odrzucenia
-  blacklist_mints: []                                # Czarna lista mintów (opcjonalnie)
-  blacklisted_creators:
-    - "Czv5xzTo1jcv4Z5w5Wg3J5q1ML5X3D2tTjv1Jx1Jx1Jx1"
-  honeypot_api: "https://api.honeypot.is/v2/IsHoneypot"  # API honeypot
-  rugcheck_api: "https://api.rugcheck.xyz/v1/tokens"     # API rugcheck
-  helius_api_key: ""                                      # Helius API key dla lepszego wykrywania (opcjonalne)
-
-# --- Zarządzanie ryzykiem portfela ---
-risk:
-  max_daily_loss_sol: 0.5                           # Maks. dzienna strata (SOL)
-  max_open_positions: 3                             # Maks. liczba jednoczesnych pozycji
-  position_timeout_minutes: 60                      # Auto-sell po 60 minutach
-
-
-# --- Monitoring i logowanie ---
-monitoring:
-  log_level: "info"                                 # Poziom logów: trace|debug|info|warn|error
-  db_path: "./sniper_trades.db"                    # Ścieżka do lokalnej bazy danych (opcjonalnie)
-
-# --- Powiadomienia Discord ---
-discord:
-  enabled: true
-  webhook_url: "https://discordapp.com/api/webhooks/1407094459493122158/9Ju35aOQQk5MrqRe4Qj4hx6Y3lPmuq7zfswplBqtB34WBJ-2fXnRSq8C1kaP0VCY8nqG"
-  alert_on_snipe: true                              # Powiadomienie przy nowym snajpie
-  alert_on_profit: true                             # Powiadomienie przy take profit
-  alert_on_loss: true                               # Powiadomienie przy stop loss
-  alert_on_error: true                              # Błędy krytyczne
-  alert_on_startup: true                            # Start bota
-
-# --- Arbitrage Bot Configuration ---
-# Sekcje wymagane dla arbitrage bota (solana-arbitrage-bot)
+  path: "./wallet.json"
+  encryption_key: "${WALLET_ENCRYPTION_KEY}"  # From env
+  
+# DEX Configuration
 dex:
   raydium:
     program_id: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"
-    sol_usdc_pool: "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2"
+    ws_endpoint: "wss://api.raydium.io/v2/ws"
+    api_endpoint: "https://api.raydium.io/v2"
   orca:
-    program_id: "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"
-    sol_usdc_pool: "HJPjoWUrhoZzkNfRpHuieeFk9WcZWjwy6PBjZ81ngndJ"
-
+    program_id: "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP"
+    ws_endpoint: "wss://api.orca.so/v1/ws"
+    whirlpool_program: "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"
+  meteora:
+    program_id: "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo"
+    api_endpoint: "https://dlmm-api.meteora.ag"
+  jupiter:
+    api_url: "https://quote-api.jup.ag/v6"
+    price_api: "https://price.jup.ag/v4"
+  phoenix:
+    program_id: "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY"
+  lifinity:
+    program_id: "EewxydAPCCVuNEyrVN68PuSYdQ7wKn27V9Gjeoi8dy3S"
+  pump_fun:
+    program_id: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwT6P"
+    api_endpoint: "https://frontend-api.pump.fun"
+    
+# Trading Limits & Risk Management
 limits:
-  max_position_sol: 0.08                            # Maks. pozycja SOL dla arbitrażu
-  min_profit_percent: 0.3                           # Min. zysk w procentach
-  min_profit_usd: 0.02                              # Min. zysk w USD
-  max_slippage_percent: 0.5                         # Maks. slippage dla arbitrażu
-  max_daily_loss_usd: 5.0                           # Maks. dzienna strata USD
-  max_daily_trades: 30                              # Maks. transakcji dziennie
-
-execution:
-  priority_fee_lamports: 5000                       # Opłata priorytetowa dla arbitrażu
-  simulation_required: true                         # Wymagaj symulacji przed wykonaniem
-  max_retries: 3                                    # Maks. liczba ponownych prób
-
-# --- Web Dashboard ---
+  # Capital management
+  max_position_sol: 100
+  micro_capital_mode:  # For 50-100 USD
+    enabled: true
+    max_position_usd: 30  # Max 30% of capital per trade
+    min_capital_usd: 50
+    max_capital_usd: 100
+    
+  # Profit thresholds  
+  min_profit_percent: 0.3
+  micro_min_profit_usd: 0.50
+  
+  # Risk limits
+  max_slippage_percent: 0.5
+  max_daily_loss_usd: 50
+  max_priority_fee_cap_lamports: 50000
+  stop_loss_percent: 10
+  
+  # Trading limits
+  max_daily_trades: 100
+  max_concurrent_positions: 5
+  
+# Sniper Configuration
+sniper:
+  enabled: true
+  mode: "aggressive"  # aggressive, moderate, safe
+  
+  # Pool detection
+  min_liquidity_usd: 5000
+  max_position_size_usd: 50
+  
+  # Profit targets
+  auto_sell_profit_percent: 20
+  trailing_stop_percent: 5
+  
+  # Safety checks
+  rug_detection:
+    enabled: true
+    min_safety_score: 0.7
+    min_locked_liquidity_percent: 50
+    max_top_holder_percent: 10
+    min_holder_count: 50
+    check_socials: true
+    
+  # Token filters
+  token_filters:
+    blacklist_mints: []  # Add known scams
+    whitelist_mints: []  # Add trusted tokens
+    min_market_cap_usd: 1000
+    max_market_cap_usd: 10000000
+    
+# Strategy Configuration
+strategies:
+  # Arbitrage
+  arbitrage:
+    enabled: true
+    min_spread_percent: 0.5
+    use_flash_loans: true
+    triangle_arbitrage: true
+    
+  # Sniping  
+  sniping:
+    enabled: true
+    monitor_new_pairs: true
+    auto_buy_score_threshold: 0.8
+    
+  # MEV Protection
+  mev_protection:
+    use_jito: true
+    use_private_mempool: true
+    bundle_transactions: true
+    
+  # Market Making
+  market_making:
+    enabled: false
+    spread_percent: 0.2
+    
+# GEPA Evolution Configuration  
+gepa:
+  enabled: true
+  population_size: 50
+  generations_per_evolution: 100
+  mutation_rate: 0.1
+  crossover_rate: 0.7
+  elite_percentage: 0.1
+  evolution_schedule: "0 2 * * SUN"  # Weekly on Sunday 2AM
+  
+# Web Server Configuration
 web:
   enabled: true
-  host: "127.0.0.1"
-  port: 3002
-  auth_token: "your-secret-token-here"              # Opcjonalny token autoryzacji
-  database_path: "./data/dashboard.db"              # Ścieżka do bazy danych dashboard
+  host: "0.0.0.0"
+  port: 8080
+  
+  # CORS
+  allowed_origins:
+    - "http://localhost:3000"
+    - "http://localhost:3001"
+    
+  # Authentication
+  admin_token: "${ADMIN_TOKEN}"  # From env
+  config_token: "${CONFIG_TOKEN}"
+  status_token: "${STATUS_TOKEN}"
+  
+  # Security
+  allowlist_control_ips:
+    - "127.0.0.1/32"
+    - "192.168.1.0/24"
+  
+  # Rate limiting (requests per minute)
+  rate_limit:
+    global: 100
+    control: 10
+    status: 60
+    
+# Monitoring & Alerts
+monitoring:
+  prometheus:
+    enabled: true
+    port: 9090
+    
+  alerts:
+    telegram:
+      enabled: true
+      bot_token: "${TELEGRAM_BOT_TOKEN}"
+      chat_id: "${TELEGRAM_CHAT_ID}"
+      
+    thresholds:
+      min_daily_profit_usd: 10
+      max_slippage_alert: 2.0
+      mev_attack_threshold: 0.3
+      
+  logging:
+    level: "info"  # debug, info, warn, error
+    file: "./logs/bot.log"
+    max_size_mb: 100
+    max_backups: 10
+    
+# Database Configuration
+database:
+  postgres:
+    enabled: true
+    url: "postgresql://user:password@localhost/solana_bot"
+    max_connections: 20
+    
+  sqlite:
+    enabled: false
+    path: "./data/trades.db"
+    
+# Flash Loan Configuration
+flash_loans:
+  enabled: true
+  providers:
+    solend:
+      enabled: true
+      program_id: "So1endDq2YkqhipRh3WViPa8hdiSpxWy6z3Z6tMCpAo"
+      max_borrow_sol: 1000
+      
+    port_finance:
+      enabled: false
+      program_id: "Port7uDYB3wk6GJAw4KT1WpTeMtSu9bTcChBHkX2LfR"
+      
+# Performance Tuning
+performance:
+  connection_pool_size: 10
+  request_timeout_ms: 5000
+  transaction_retry_count: 3
+  parallel_requests: true
+  cache_ttl_seconds: 60
+  
+# Environment
+environment: "production"  # development, staging, production

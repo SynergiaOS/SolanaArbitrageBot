@@ -2,6 +2,7 @@
 
 # 1) Builder stage
 FROM rust:1.79 as builder
+ARG CARGO_FEATURES=monitor
 WORKDIR /app
 # Cache dependencies
 COPY Cargo.toml Cargo.lock ./
@@ -9,10 +10,10 @@ COPY Cargo.toml Cargo.lock ./
 RUN mkdir -p src && echo "fn main(){}" > src/main.rs && \
     mkdir -p src/bin && echo "fn main(){}" > src/bin/sniper.rs && \
     echo "fn main(){}" > demo_discord.rs
-RUN cargo build --release || true
+RUN cargo build --release --no-default-features --features $CARGO_FEATURES || true
 # Now copy real sources
 COPY . .
-RUN cargo build --release
+RUN cargo build --release --no-default-features --features $CARGO_FEATURES
 
 # 2) Runtime stage (debian slim)
 FROM debian:stable-slim as runtime

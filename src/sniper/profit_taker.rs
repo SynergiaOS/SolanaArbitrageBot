@@ -415,6 +415,7 @@ impl ProfitTaker {
         }
     }
     
+    #[cfg(not(feature = "sniper_lite"))]
     /// Execute profit taking action
     async fn execute_profit_action(&self, action: &ProfitAction) -> Result<ProfitExecutionResult> {
         let start_time = Instant::now();
@@ -484,7 +485,28 @@ impl ProfitTaker {
             }
         }
     }
-    
+
+    #[cfg(feature = "sniper-lite")]
+    async fn execute_profit_action(&self, action: &ProfitAction) -> Result<ProfitExecutionResult> {
+        let start_time = Instant::now();
+        info!(
+            "💰 [sniper-lite] Stub execute_profit_action: {:?} for {} tokens (no real execution)",
+            action.action_type, action.amount_to_sell
+        );
+
+        Ok(ProfitExecutionResult {
+            success: true,
+            transaction_signature: None,
+            amount_sold: Decimal::ZERO,
+            price_achieved: action.target_price,
+            profit_realized: Decimal::ZERO,
+            execution_time_ms: start_time.elapsed().as_millis() as u64,
+            slippage: Decimal::ZERO,
+            error_message: Some("sniper-lite: execution disabled (stub)".to_string()),
+            timestamp: SystemTime::now(),
+        })
+}
+
     /// Get current token price
     async fn get_current_price(&self, token_mint: &Pubkey) -> Result<Decimal> {
         // Check cache first

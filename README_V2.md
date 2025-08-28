@@ -26,6 +26,23 @@ BOT_MAX_POSITION_SOL=1.0 ./target/release/solana-arbitrage-bot
 
 ---
 
+## 🧩 Build monitor-only (stabilny profil produkcyjny)
+
+```bash
+# Kompilacja monitor-only
+cargo build --release --no-default-features --features monitor
+
+# Testy monitor-only
+cargo test --no-default-features --features monitor --workspace --verbose
+
+# Walidacja zależności monitor-only
+cargo tree --no-default-features --features monitor -e features
+```
+
+Uwaga: REST/HTTP API jest dostępne tylko w buildzie z cechą web (np. w profilu full). Wariant monitor-only nie wystawia endpointów HTTP.
+
+---
+
 ## 📊 CO ZOSTAŁO NAPRAWIONE
 
 ### ✅ Błędy Kompilacji (100% naprawione)
